@@ -15,6 +15,12 @@ sys.path.append(root_dir)
 
 from glob2 import glob
 from scipy.io.wavfile import read as scipy_wavread
+import joblib
+import torchaudio
+import torch
+
+import two_step_mask_learning.utils.progress_display as progress_display
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,7 +38,7 @@ def parse_info_from_name(preprocessed_dirname):
         min_or_max: String whether the mixtures are aligned with the maximum
         or the minimum number of samples of the constituting sources
         n_speakers: number of speakers in mixtures
-        fs: sampling rate in Hz
+        fs: sampling rate in kHz
         wav_timelength: The timelength in seconds of all the mixtures and
                         clean sources
     """
@@ -42,7 +48,7 @@ def parse_info_from_name(preprocessed_dirname):
         min_or_max = elements[-2]
         assert (min_or_max == 'min' or min_or_max == 'max')
         wav_timelength = float(elements[-3][:-1])
-        fs = float(elements[-4][:-1])
+        fs = float(elements[-4][:-1]) * 1000
         n_speakers = int(elements[-5].strip("mix"))
 
         return min_or_max, n_speakers, fs, wav_timelength
@@ -75,11 +81,11 @@ def infer_output_name(input_dirpath, wav_timelength):
         elements = input_dirpath.lower().split('/')
         min_or_max = elements[-1]
         assert (min_or_max == 'min' or min_or_max == 'max')
-        fs = int(elements[-2].strip('wav').strip('k'))
+        fs = int(elements[-2].strip('wav').strip('k')) * 1000
         n_speakers = int(elements[-3].strip("speakers"))
         output_name = "wsj0_{}mix_{}k_{}s_min_preprocessed".format(
             n_speakers,
-            fs,
+            fs / 1000,
             float(wav_timelength))
 
         # test that the inferred output name is parsable back
@@ -98,6 +104,89 @@ def infer_output_name(input_dirpath, wav_timelength):
         raise IOError("The structure of the wsj0-mix is not in the right "
                 "format. A proper format would be: "
                 "wsj0-mix/{2 or 3}speakers/wav{fs in Hz}k/{min or max}")
+
+
+def write_data_wrapper_func(input_dirpath,
+                            clean_folders,
+                            max_wav_samples,
+                            output_dirpath):
+
+    def process_uid(uid):
+        mix_path = os.path.join(input_dirpath, 'mix', uid)
+        mix_wav = torchaudio.load(mix_path)[0]
+        sources_paths = [os.path.join(input_dirpath, fo, uid)
+                         for fo in clean_folders]
+        sources_w_list = [torchaudio.load(p)[0] for p in sources_paths]
+        sources_wavs = torch.cat(sources_w_list, dim=0)
+
+        min_len = min(mix_wav.shape[-1], sources_wavs.shape[-1])
+        if min_len < max_wav_samples:
+            return
+
+        mix_wav = mix_wav[:, :max_wav_samples]
+        sources_wavs = sources_wavs[:, :max_wav_samples]
+
+        output_uid_folder = os.path.join(output_dirpath, uid)
+
+        data = {
+            'mixture_wav': mix_wav,
+            'clean_wavs': sources_wavs
+        }
+
+        if not os.path.exists(output_uid_folder):
+            os.makedirs(output_uid_folder)
+
+        for k, v in data.items():
+            file_path = os.path.join(output_uid_folder, k)
+            joblib.dump(v, file_path, compress=3)
+
+    return lambda uid: process_uid(uid)
+
+
+def convert_subset(input_dirpath,
+                   output_dirpath,
+                   fs,
+                   n_speakers,
+                   wav_timelength,
+                   subset=None):
+    """! Convert a subset of files in the appropriate format
+
+    Args:
+        input_dirpath: The path of a wsj0mix dataset e.g.
+                       wsj0-mix/2speakers/wav8k/min (for mixes with
+                       minimum length)
+        output_dirpath: The path for storing the new dataset
+                        (the directories would be created recursively)
+        n_speakers: number of speakers in mixtures
+        fs: sampling rate in Hz
+        wav_timelength: The timelength in seconds of all the mixtures and
+                        clean sources
+
+    Generates: The structure in output_dirpath where each unique id would
+    have a corresponding folder with all the files in tensors or .txt for
+    configs
+            e.g. uid: 423a0105_1.2681_446o030n_-1.2681.wav -->
+            output_dirpath/423a0105_1.2681_446o030n_-1.2681
+                          mixture_wav (tensor)
+                          clean_sources_wavs (tensor)
+    """
+    mixtures_dir = os.path.join(input_dirpath, 'mix')
+    files = glob(mixtures_dir + '/*.wav')
+    unique_ids = set([os.path.basename(f) for f in files])
+    max_wav_samples = int(wav_timelength * fs)
+
+    clean_folders = ['s'+str(n+1) for n in range(n_speakers)]
+
+    write_data_func = write_data_wrapper_func(input_dirpath,
+                                              clean_folders,
+                                              max_wav_samples,
+                                              output_dirpath)
+
+    progress_display.progress_bar_wrapper(
+        write_data_func,
+        list(unique_ids),
+        message='{}: Processing {} files...'.format(
+            subset, len(unique_ids)))
 
 
 def convert_wsj0mix_to_universal_dataset(input_dirpath,
@@ -126,18 +215,21 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
     output_name, fs, n_speakers = infer_output_name(input_dirpath,
                                                     wav_timelength)
 
-    print(output_name, fs, n_speakers)
+    root_out_dir = os.path.join(output_dirpath, output_name)
 
-    # subsets = os.listdir(input_dirpath)
-    # for subset in subsets:
-    #     subset_input_dirpath = os.path.join(input_dirpath, subset)
-    #     subset_output_dirpath = os.path.join(output_dirpath, subset)
+    subsets = os.listdir(input_dirpath)
+    print("All the subsets are: {}".format(subsets))
+    for subset in subsets:
+        subset_input_dirpath = os.path.join(input_dirpath, subset)
+        subset_output_dirpath = os.path.join(root_out_dir, subset)
+        convert_subset(subset_input_dirpath,
+                       subset_output_dirpath,
+                       fs,
+                       n_speakers,
+                       wav_timelength,
+                       subset=subset)
 
-
-    # mixtures_dir = os.path.join(input_dirpath, subsets[0], 'mix')
-    # files = glob(mixtures_dir + '/*.wav')
-    # unique_ids = set([os.path.basename(f) for f in files])
-    # print(unique_ids)
+    print("Dataset ready at: {}".format(root_out_dir))
 
 
 def example_of_usage():
