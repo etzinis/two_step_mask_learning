@@ -35,8 +35,6 @@ def progress_bar_wrapper(func,
 
 
 def test():
-    import pytest
-
     M = int(10e7)
     size = int(10e4)
     l = np.random.uniform(low=-M, high=M, size=size)
