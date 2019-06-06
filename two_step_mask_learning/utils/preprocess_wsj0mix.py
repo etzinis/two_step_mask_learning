@@ -130,7 +130,7 @@ def write_data_wrapper_func(input_dirpath,
 
         data = {
             'mixture_wav': mix_wav,
-            'clean_wavs': sources_wavs
+            'clean_sources_wavs': sources_wavs
         }
 
         if not os.path.exists(output_uid_folder):
@@ -138,7 +138,7 @@ def write_data_wrapper_func(input_dirpath,
 
         for k, v in data.items():
             file_path = os.path.join(output_uid_folder, k)
-            joblib.dump(v, file_path, compress=3)
+            joblib.dump(v, file_path, compress=1)
 
     return lambda uid: process_uid(uid)
 
@@ -234,7 +234,7 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
 
 def example_of_usage():
     input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/min'
-    output_dirpath = '/mnt/data/wsj0mix_preprocessed'
+    output_dirpath = '/mnt/nvme/wsj0_mix_preprocessed'
     wav_timelength = 4
     convert_wsj0mix_to_universal_dataset(input_dirpath,
                                          output_dirpath,
