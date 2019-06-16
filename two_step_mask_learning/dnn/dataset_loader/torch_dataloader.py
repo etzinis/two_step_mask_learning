@@ -256,6 +256,31 @@ def get_data_gen_from_loader(data_loader):
     return data_generator
 
 
+def get_data_generators(
+    data_paths=[''],
+    bs=16,
+    n_jobs=3,
+    get_top=[None],
+    return_items=['mixture_wav',
+                  'clean_sources_wavs']):
+    assert len(get_top) == len(data_paths)
+    generators = []
+
+    for path, n_elements in zip(data_paths, get_top):
+        train_args = argparse.Namespace(
+            input_dataset_p=path,
+            batch_size=bs,
+            n_jobs=n_jobs,
+            get_top=n_elements,
+            return_items=return_items
+        )
+        subset_DS = End2EndMixtureDataset(**vars(train_args))
+        subset_gen = get_data_gen_from_loader(subset_DS)
+        generators.append(subset_gen)
+
+    return generators
+
+
 def example_of_usage(pytorch_dataloader_args):
     """!
     Simple example of how to use this pytorch data loader"""
