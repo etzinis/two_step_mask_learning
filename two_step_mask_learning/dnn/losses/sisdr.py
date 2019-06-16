@@ -85,7 +85,7 @@ class TorchSISNRLoss(nn.Module):
 
 class PermInvariantSISDR(nn.Module):
     """!
-    Class for SISNR computation between reconstructed signals and
+    Class for SISDR computation between reconstructed signals and
     target wavs by also regulating it with learned target masks."""
 
     def __init__(self,
