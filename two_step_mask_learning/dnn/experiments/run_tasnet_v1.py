@@ -21,15 +21,20 @@ from torch.autograd import Variable
 import two_step_mask_learning.dnn.dataset_loader.torch_dataloader as dataloader
 from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_P, \
     WSJ_MIX_2_8K_PREPROCESSED_TEST_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
+import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
+import two_step_mask_learning.dnn.losses.norm as norm_lib
 
 
-hyper_params = {
+hparams = {
     "sequence_length": 28,
     "input_size": 28,
     "hidden_size": 128,
     "num_layers": 2,
     "num_classes": 10,
-    "batch_size": 100,
+    "bs": 16,
+    "n_jobs":3,
+    "tr_get_top": 64,
+    "val_get_top": 64,
     "num_epochs": 3,
     "learning_rate": 0.01
 }
@@ -38,31 +43,52 @@ hyper_params = {
 # experiment = Experiment(API_KEY, project_name="first_tasnet_wsj02mix")
 # experiment.log_parameters(hyper_params)
 
+n_sources = 2
+
+# define data loaders
 train_loader, eval_loader = dataloader.get_data_generators(
     [WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P,
      WSJ_MIX_2_8K_PREPROCESSED_EVAL_P],
-    bs=16, n_jobs=3, get_top=[64, 64],
+    bs=hparams['bs'], n_jobs=hparams['n_jobs'],
+    get_top=[hparams['tr_get_top'], hparams['val_get_top']],
     return_items=['mixture_wav', 'clean_sources_wavs']
 )
-# # MNIST Dataset
-# train_dataset = dsets.MNIST(root='./data/',
-#                             train=True,
-#                             transform=transforms.ToTensor(),
-#                             download=True)
-#
-# test_dataset = dsets.MNIST(root='./data/',
-#                            train=False,
-#                            transform=transforms.ToTensor())
-#
-# # Data Loader (Input Pipeline)
-# train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-#                                            batch_size=hyper_params['batch_size'],
-#                                            shuffle=True)
-#
-# test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-#                                           batch_size=hyper_params['batch_size'],
-#                                           shuffle=False)
-#
+
+# define the losses that are going to be used
+recon_loss_name, recon_loss = (
+    'tr_SISDR',
+    sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                 n_sources=n_sources,
+                                 zero_mean=False,
+                                 backward_loss=True))
+
+val_losses = dict([
+    ('val_L1', norm_lib.PermInvariantNorm(batch_size=hparams['bs'],
+                                          zero_mean=False,
+                                          n_sources=n_sources)),
+    ('val_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                               n_sources=n_sources,
+                                               zero_mean=True,
+                                               backward_loss=False)),
+    ('val_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                                  n_sources=1,
+                                                  zero_mean=True,
+                                                  backward_loss=False))
+  ])
+
+train_losses = dict([
+    ('tr_L1', norm_lib.PermInvariantNorm(batch_size=hparams['bs'],
+                                         zero_mean=False,
+                                         n_sources=n_sources)),
+    ('tr_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                              n_sources=n_sources,
+                                              zero_mean=True,
+                                              backward_loss=False)),
+    ('tr_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                                 n_sources=1,
+                                                 zero_mean=True,
+                                                 backward_loss=False))])
+
 #
 # # RNN Model (Many-to-One)
 # class RNN(nn.Module):
