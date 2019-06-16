@@ -16,7 +16,7 @@ sys.path.append(root_dir)
 from glob2 import glob
 from scipy.io.wavfile import read as scipy_wavread
 import joblib
-import torchaudio
+from scipy.io import wavfile
 import torch
 
 import two_step_mask_learning.utils.progress_display as progress_display
@@ -113,10 +113,14 @@ def write_data_wrapper_func(input_dirpath,
 
     def process_uid(uid):
         mix_path = os.path.join(input_dirpath, 'mix', uid)
-        mix_wav = torchaudio.load(mix_path)[0]
+        mix_wav = wavfile.read(mix_path)[1] / 29491.
+        mix_wav = torch.tensor(mix_wav, dtype=torch.float32).unsqueeze(0)
         sources_paths = [os.path.join(input_dirpath, fo, uid)
                          for fo in clean_folders]
-        sources_w_list = [torchaudio.load(p)[0] for p in sources_paths]
+        sources_w_list = [wavfile.read(p)[1] / 29491.
+                          for p in sources_paths]
+        sources_w_list = [torch.tensor(np_vec, dtype=torch.float32).unsqueeze(0)
+                          for np_vec in sources_w_list]
         sources_wavs = torch.cat(sources_w_list, dim=0)
 
         min_len = min(mix_wav.shape[-1], sources_wavs.shape[-1])
@@ -138,7 +142,7 @@ def write_data_wrapper_func(input_dirpath,
 
         for k, v in data.items():
             file_path = os.path.join(output_uid_folder, k)
-            joblib.dump(v, file_path, compress=1)
+            joblib.dump(v, file_path, compress=0)
 
     return lambda uid: process_uid(uid)
 
