@@ -101,7 +101,9 @@ class End2EndMixtureDataset(Dataset):
             'return_items',
             known_type=list,
             choices=['mixture_wav',
-                     'clean_sources_wavs'])
+                     'clean_sources_wavs',
+                     'mic1_wav_downsampled',
+                     'clean_sources_wavs_downsampled'])
 
         self.n_batches = int(self.n_items / self.batch_size)
 
@@ -241,7 +243,9 @@ def get_args():
                                  'clean_sources_wavs'],
                         required=True,
                         choices=['mixture_wav',
-                                 'clean_sources_wavs'])
+                                 'clean_sources_wavs',
+                                 'mic1_wav_downsampled',
+                                 'clean_sources_wavs_downsampled'])
     return parser.parse_args()
 
 
@@ -267,14 +271,14 @@ def get_data_generators(
     generators = []
 
     for path, n_elements in zip(data_paths, get_top):
-        train_args = argparse.Namespace(
+        args = argparse.Namespace(
             input_dataset_p=path,
             batch_size=bs,
             n_jobs=n_jobs,
             get_top=n_elements,
             return_items=return_items
         )
-        subset_DS = End2EndMixtureDataset(**vars(train_args))
+        subset_DS = End2EndMixtureDataset(**vars(args))
         subset_gen = get_data_gen_from_loader(subset_DS)
         generators.append(subset_gen)
 
