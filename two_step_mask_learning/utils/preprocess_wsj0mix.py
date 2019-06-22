@@ -85,7 +85,7 @@ def infer_output_name(input_dirpath, wav_timelength):
         n_speakers = int(elements[-3].strip("speakers"))
         output_name = "wsj0_{}mix_{}k_{}s_min_preprocessed".format(
             n_speakers,
-            fs / 1000,
+            fs / 1000.,
             float(wav_timelength))
 
         # test that the inferred output name is parsable back
@@ -106,6 +106,12 @@ def infer_output_name(input_dirpath, wav_timelength):
                 "wsj0-mix/{2 or 3}speakers/wav{fs in Hz}k/{min or max}")
 
 
+def normalize_wav(wav, eps=10e-7):
+    mean = wav.mean()
+    std = wav.std()
+    return (wav - mean) / (std + eps)
+
+
 def write_data_wrapper_func(input_dirpath,
                             clean_folders,
                             max_wav_samples,
@@ -114,12 +120,14 @@ def write_data_wrapper_func(input_dirpath,
     def process_uid(uid):
         mix_path = os.path.join(input_dirpath, 'mix', uid)
         mix_wav = wavfile.read(mix_path)[1] / 29491.
-        mix_wav = torch.tensor(mix_wav, dtype=torch.float32).unsqueeze(0)
+        mix_wav = normalize_wav(mix_wav)
+        mix_wav = torch.tensor(mix_wav, dtype=torch.float32)
         sources_paths = [os.path.join(input_dirpath, fo, uid)
                          for fo in clean_folders]
         sources_w_list = [wavfile.read(p)[1] / 29491.
                           for p in sources_paths]
-        sources_w_list = [torch.tensor(np_vec, dtype=torch.float32).unsqueeze(0)
+        sources_w_list = [torch.tensor(normalize_wav(np_vec),
+                                       dtype=torch.float32).unsqueeze(0)
                           for np_vec in sources_w_list]
         sources_wavs = torch.cat(sources_w_list, dim=0)
 
@@ -127,7 +135,7 @@ def write_data_wrapper_func(input_dirpath,
         if min_len < max_wav_samples:
             return
 
-        mix_wav = mix_wav[:, :max_wav_samples]
+        mix_wav = mix_wav[:max_wav_samples]
         sources_wavs = sources_wavs[:, :max_wav_samples]
 
         output_uid_folder = os.path.join(output_dirpath, uid)
