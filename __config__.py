@@ -8,6 +8,15 @@ WSJ_MIX_2_8K_PREPROCESSED_EVAL_P = \
     '/mnt/nvme/wsj0_mix_preprocessed/wsj0_2mix_8.0k_4.0s_min_preprocessed/cv'
 WSJ_MIX_2_8K_PREPROCESSED_TEST_P = \
     '/mnt/nvme/wsj0_mix_preprocessed/wsj0_2mix_8.0k_4.0s_min_preprocessed/tt'
+TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P = \
+    '/mnt/nvme/end2end_unsupervised_holder' \
+    '/timit_10000_1000_1000_2_fm_random_taus_delays/train'
+TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P = \
+    '/mnt/nvme/end2end_unsupervised_holder' \
+    '/timit_10000_1000_1000_2_fm_random_taus_delays/val'
+TIMIT_MIX_2_8K_PREPROCESSED_TEST_P = \
+    '/mnt/nvme/end2end_unsupervised_holder' \
+    '/timit_10000_1000_1000_2_fm_random_taus_delays/test'
 API_KEY = '66xB8zZUV1IVstsauUe6royLR'
 
 
