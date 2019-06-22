@@ -1,3 +1,11 @@
+"""!
+@brief TasNet Wrapper for Mask estimation and time-signal inference.
+Augments the functionality of Tasnet separation module.
+
+@author Efthymios Tzinis {etzinis2@illinois.edu}
+@copyright University of Illinois at Urbana-Champaign
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,11 +15,11 @@ class TNEncoder(nn.Module):
     def __init__(self, enc_channels, kernel_size):
         super().__init__()
         self.conv = nn.Conv1d(1, enc_channels, kernel_size,
-                              stride=kernel_size // 2)
+                              stride=kernel_size // 2,
+                              padding=(kernel_size-1)//2)
 
     def forward(self, x):
         w = F.relu(self.conv(x))
-        #         w = self.conv(x)
         return w
 
 
@@ -100,12 +108,12 @@ class TNSeparationModule(nn.Module):
         super().__init__()
         self.C = C
         self.layernorm = nn.LayerNorm(N)
-        self.bottleneck_conv = nn.Conv1d(N, H, 1)
+        self.bottleneck_conv = nn.Conv1d(N, B, 1)
         self.blocks = nn.ModuleList()
         for r in range(R):
             for x in range(X):
-                self.blocks.append(TNSConvBlock(H, H, P, x))
-        self.out_conv = nn.Conv1d(H, N * C, 1)
+                self.blocks.append(TNSConvBlock(B, H, P, x))
+        self.out_conv = nn.Conv1d(B, N * C, 1)
 
     def forward(self, x):
         x = x.contiguous().transpose(1, 2)
@@ -116,15 +124,10 @@ class TNSeparationModule(nn.Module):
             m = self.blocks[i](m)
 
         m = self.out_conv(m)
-        m = m.unsqueeze(1).contiguous().view(m.shape[0], self.C, -1,
-                                             m.shape[-1])
+        m = m.unsqueeze(1).contiguous().view(m.shape[0], self.C, -1, m.shape[-1])
         m = F.softmax(m, dim=1)
-        #         x = x.unsqueeze(1)
-        #         m_out = x * m
-        #         return m_out
         return m
 
-    # tasnet like mask estimator
 class TasNetFrontendsWrapper(nn.Module):
     '''
         Separation module in TasNet-like architecture.
@@ -151,9 +154,9 @@ class TasNetFrontendsWrapper(nn.Module):
                  in_samples,
                  pretrained_encoder=None,
                  pretrained_decoder=None,
-                 embedding_width=1,
                  N=256,
                  B=256,
+                 H=512,
                  L=20,
                  P=3,
                  X=8,
@@ -162,7 +165,7 @@ class TasNetFrontendsWrapper(nn.Module):
         super().__init__()
 
         if (pretrained_encoder is not None and
-                pretrained_decoder is not None):
+            pretrained_decoder is not None):
 
             self.k_size = pretrained_encoder.conv.kernel_size[0]
             self.k_stride = pretrained_encoder.conv.stride[0]
@@ -171,8 +174,7 @@ class TasNetFrontendsWrapper(nn.Module):
 
             self.n_basis = pretrained_encoder.conv.out_channels
             self.n_time_frames = int((in_samples + 2 * self.pad - self.dil *
-                                      (
-                                                  self.k_size - 1) - 1) / self.k_stride + 1)
+                                     (self.k_size - 1) - 1) / self.k_stride + 1)
 
             self.encoder = pretrained_encoder
             self.decoder = pretrained_decoder
@@ -188,19 +190,20 @@ class TasNetFrontendsWrapper(nn.Module):
             self.n_basis = N
             self.encoder = TNEncoder(self.n_basis, self.k_size)
             self.decoder = nn.ConvTranspose1d(self.n_basis, 1, self.k_size,
-                                              stride=self.k_size // 2)
+                                              stride=self.k_size // 2,
+                                              padding=(self.k_size-1)//2,)
             self.n_time_frames = int(
                 (in_samples - (self.k_size - 1) - 1) / (self.k_size // 2) + 1)
 
         self.P = P
         self.R = R
         self.X = X
-        self.embedding_width = embedding_width
-        self.H = self.embedding_width * self.n_basis * 2
+        self.B = B
+        self.H = H
         self.n_sources = n_sources
 
         self.sep_module = TNSeparationModule(N=self.n_basis,
-                                             B=self.n_basis,
+                                             B=self.B,
                                              H=self.H,
                                              P=self.P,
                                              X=self.X,
@@ -239,5 +242,4 @@ class TasNetFrontendsWrapper(nn.Module):
 
     def AE_recontruction(self, mixture_wav):
         enc_mixture = self.encoder(mixture_wav)
-        #         x = enc_mixture.unsqueeze(1)
         return self.decoder(enc_mixture)
