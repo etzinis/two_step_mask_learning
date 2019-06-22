@@ -136,13 +136,12 @@ class PermInvariantSISDR(nn.Module):
         sisnr_l = []
         for perm in self.permutations:
             permuted_pr_batch = pr_batch[:, perm, :]
-            s_t = self.dot(permuted_pr_batch, t_batch) / (
-                    t_t_diag + eps) * t_batch
+            s_t = (self.dot(permuted_pr_batch, t_batch) / (t_t_diag + eps)
+                   * t_batch)
             e_t = permuted_pr_batch - s_t
             sisnr = 10 * torch.log10(self.dot(s_t, s_t) /
-                                     self.dot(e_t, e_t + eps))
+                                     (self.dot(e_t, e_t) + eps))
             sisnr_l.append(sisnr)
-
         all_sisnrs = torch.cat(sisnr_l, -1)
         best_sisdr = torch.max(all_sisnrs, -1)[0].mean()
 
