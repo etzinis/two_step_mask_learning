@@ -20,6 +20,9 @@ def get_args():
                         help="Validation dataset",
                         default='WSJ2MIX8K',
                         choices=['WSJ2MIX8K', 'TIMITMF8K'])
+    parser.add_argument("-elp", "--experiment_logs_path", type=str,
+                        help="""Path for logging experiment's audio.""",
+                        default=None)
     parser.add_argument("--n_train", type=int,
                         help="""Reduce the number of training 
                             samples to this number.""", default=None)
@@ -74,6 +77,9 @@ def get_args():
     parser.add_argument("-R", "--tasnet_R", type=int,
                         help="Number of repeats of TN Blocks",
                         default=4)
+    parser.add_argument("-norm", "--norm_type", type=str,
+                        help="""The type of the applied normalization layer.""",
+                        default="gln", choices=['bn', 'gln'])
     # training params
     parser.add_argument("-bs", "--batch_size", type=int,
                         help="""The number of samples in each batch. 
