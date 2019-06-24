@@ -109,6 +109,7 @@ def infer_output_name(input_dirpath, wav_timelength):
 def normalize_wav(wav, eps=10e-7):
     mean = wav.mean()
     std = wav.std()
+    # std = 1.
     return (wav - mean) / (std + eps)
 
 
@@ -120,7 +121,7 @@ def write_data_wrapper_func(input_dirpath,
     def process_uid(uid):
         mix_path = os.path.join(input_dirpath, 'mix', uid)
         mix_wav = wavfile.read(mix_path)[1] / 29491.
-        mix_wav = normalize_wav(mix_wav)
+        # mix_wav = normalize_wav(mix_wav)
         mix_wav = torch.tensor(mix_wav, dtype=torch.float32)
         sources_paths = [os.path.join(input_dirpath, fo, uid)
                          for fo in clean_folders]
