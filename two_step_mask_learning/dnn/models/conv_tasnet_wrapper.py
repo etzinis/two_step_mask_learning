@@ -16,7 +16,8 @@ class TNEncoder(nn.Module):
         super().__init__()
         self.conv = nn.Conv1d(1, enc_channels, kernel_size,
                               stride=kernel_size // 2,
-                              padding=(kernel_size-1)//2)
+                              padding=(kernel_size-1)//2,
+                              bias=False)
 
     def forward(self, x):
         w = F.relu(self.conv(x))
@@ -42,11 +43,41 @@ class TNDConvLayer(nn.Module):
         self.conv = nn.Conv1d(out_channels, out_channels,
                               kernel_size,
                               padding=dilation * (kernel_size - 1) // 2,
-                              dilation=dilation, groups=out_channels)
+                              dilation=dilation, groups=out_channels,
+                              bias=False)
 
     def forward(self, x):
         out = self.conv(x)
         return out
+
+
+class GlobalLayerNorm(nn.Module):
+    """Global Layer Normalization (gLN)"""
+    def __init__(self, channel_size):
+        super(GlobalLayerNorm, self).__init__()
+        self.gamma = nn.Parameter(torch.empty((1, channel_size, 1)))
+        self.beta = nn.Parameter(torch.empty((1, channel_size, 1)))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.gamma.data.fill_(1)
+        self.beta.data.zero_()
+
+    def forward(self, y):
+        """
+        Args:
+            y: [M, N, K], M is batch size, N is channel size, K is length
+        Returns:
+            gLN_y: [M, N, K]
+        """
+        # TODO: in torch 1.0, torch.mean() support dim list
+        mean = y.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True) #[M, 1, 1]
+        var = (torch.pow(y-mean, 2)).mean(dim=1,
+                                          keepdim=True).mean(dim=2,
+                                                             keepdim=True)
+        gLN_y = (self.gamma * (y - mean) /
+                 torch.pow(var + 10e-8, 0.5) + self.beta)
+        return gLN_y
 
 
 class TNSConvBlock(nn.Module):
@@ -65,15 +96,18 @@ class TNSConvBlock(nn.Module):
 
     '''
 
-    def __init__(self, in_channels, out_channels, kernel_size, depth):
+    def __init__(self, in_channels, out_channels, kernel_size, depth,
+                 norm='gln'):
         super().__init__()
         self.in_conv = nn.Conv1d(in_channels, out_channels, 1)
         self.dconv = TNDConvLayer(out_channels, kernel_size, 2 ** depth)
         self.out_conv = nn.Conv1d(out_channels, in_channels, 1)
         self.in_prelu = nn.PReLU(out_channels)
         self.out_prelu = nn.PReLU(out_channels)
-        self.in_norm = nn.BatchNorm1d(out_channels)
-        self.out_norm = nn.BatchNorm1d(out_channels)
+        self.in_norm = get_norm_layer(norm_type=norm,
+                                      num_parameters=out_channels)
+        self.out_norm = get_norm_layer(norm_type=norm,
+                                      num_parameters=out_channels)
 
     def forward(self, x):
         inp = x
@@ -85,6 +119,17 @@ class TNSConvBlock(nn.Module):
         x = self.out_norm(x)
         x = self.out_conv(x)
         return inp + x
+
+
+def get_norm_layer(norm_type='', num_parameters=None):
+    if norm_type.lower() == 'gln':
+        return GlobalLayerNorm(num_parameters)
+    elif norm_type.lower() == 'bn':
+        return nn.BatchNorm1d(num_parameters)
+    else:
+        raise NotImplementedError("Norm Type: {}  or Number of Parameters: {} "
+                                  "is not available or invalid, respectively."
+                                  "".format(norm_type, num_parameters))
 
 
 class TNSeparationModule(nn.Module):
@@ -102,23 +147,23 @@ class TNSeparationModule(nn.Module):
             P: int, size of D-conv filter
             X: int, number of conv blocks in each repeat (max depth of dilation)
             R: int, number of repeats
+            C: int, number of sources
+            norm: The type of the applied normalization layer
     '''
 
-    def __init__(self, N=256, B=256, H=512, P=3, X=8, R=4, C=2):
+    def __init__(self, N=256, B=256, H=512, P=3, X=8, R=4, C=2, norm="gln"):
         super().__init__()
         self.C = C
-        self.layernorm = nn.LayerNorm(N)
+        self.input_norm = get_norm_layer(norm_type=norm, num_parameters=N)
         self.bottleneck_conv = nn.Conv1d(N, B, 1)
         self.blocks = nn.ModuleList()
         for r in range(R):
             for x in range(X):
-                self.blocks.append(TNSConvBlock(B, H, P, x))
+                self.blocks.append(TNSConvBlock(B, H, P, x, norm=norm))
         self.out_conv = nn.Conv1d(B, N * C, 1)
 
     def forward(self, x):
-        x = x.contiguous().transpose(1, 2)
-        x = self.layernorm(x)
-        x = x.contiguous().transpose(1, 2)
+        x = self.input_norm(x)
         m = self.bottleneck_conv(x)
         for i in range(len(self.blocks)):
             m = self.blocks[i](m)
@@ -161,7 +206,8 @@ class TasNetFrontendsWrapper(nn.Module):
                  P=3,
                  X=8,
                  R=4,
-                 n_sources=2):
+                 n_sources=2,
+                 norm='gln'):
         super().__init__()
 
         if (pretrained_encoder is not None and
@@ -191,7 +237,8 @@ class TasNetFrontendsWrapper(nn.Module):
             self.encoder = TNEncoder(self.n_basis, self.k_size)
             self.decoder = nn.ConvTranspose1d(self.n_basis, 1, self.k_size,
                                               stride=self.k_size // 2,
-                                              padding=(self.k_size-1)//2,)
+                                              padding=(self.k_size-1)//2,
+                                              bias=False)
             self.n_time_frames = int(
                 (in_samples - (self.k_size - 1) - 1) / (self.k_size // 2) + 1)
 
@@ -208,7 +255,8 @@ class TasNetFrontendsWrapper(nn.Module):
                                              P=self.P,
                                              X=self.X,
                                              R=self.R,
-                                             C=self.n_sources)
+                                             C=self.n_sources,
+                                             norm=norm)
 
     def get_encoded_mixture(self, mixture_wav):
         return self.encoder(mixture_wav)
