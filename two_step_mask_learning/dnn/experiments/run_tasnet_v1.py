@@ -25,6 +25,7 @@ import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
 import two_step_mask_learning.dnn.models.conv_tasnet_wrapper as tasnet_wrapper
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
+import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 
 
@@ -41,6 +42,7 @@ hparams = {
     "X": args.tasnet_X,
     "B": args.tasnet_B,
     "H": args.tasnet_H,
+    "norm": args.norm_type,
     "n_kernel": args.n_kernel,
     "n_basis": args.n_basis,
     "bs": args.batch_size,
@@ -51,27 +53,36 @@ hparams = {
     "n_epochs": args.n_epochs,
     "learning_rate": args.learning_rate,
     "return_items": args.return_items,
-    "tags": args.cometml_tags
+    "tags": args.cometml_tags,
+    "log_path": args.experiment_logs_path
 }
 
 if (hparams['train_dataset'] == 'WSJ2MIX8K' and
     hparams['val_dataset'] == 'WSJ2MIX8K'):
-    in_samples = 32000
-    n_sources = 2
+    hparams['in_samples'] = 32000
+    hparams['n_sources'] = 2
+    hparams['fs'] = 8000.
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
 elif(hparams['train_dataset'] == 'TIMITMF8K' and
      hparams['val_dataset'] == 'TIMITMF8K'):
-    n_sources = 2
-    in_samples = 16000
+    hparams['in_samples'] = 16000
+    hparams['n_sources'] = 2
+    hparams['fs'] = 8000.
     hparams['train_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P
-    hparams['return_items'] = return_items=['mic1_wav_downsampled',
-                                            'clean_sources_wavs_downsampled']
+    hparams['return_items'] = ['mic1_wav_downsampled',
+                               'clean_sources_wavs_downsampled']
 else:
     raise NotImplementedError('Datasets: {}, {} are not available'
                               ''.format(hparams['train_dataset'],
                                         hparams['val_dataset']))
+
+if hparams["log_path"] is not None:
+    audio_logger = log_audio.AudioLogger(hparams["log_path"],
+                                         hparams["fs"],
+                                         hparams["bs"],
+                                         hparams["n_sources"])
 
 experiment = Experiment(API_KEY,
                         project_name=hparams['project_name'])
@@ -87,26 +98,36 @@ else:
     experiment.set_name(experiment_name)
 
 # define data loaders
-train_gen, val_gen = dataloader.get_data_generators(
-    [hparams['train_dataset_path'], hparams['val_dataset_path']],
+train_gen, val_gen, train_val_gen = dataloader.get_data_generators(
+    [hparams['train_dataset_path'],
+     hparams['val_dataset_path'],
+     hparams['train_dataset_path']],
     bs=hparams['bs'], n_jobs=hparams['n_jobs'],
-    get_top=[hparams['tr_get_top'], hparams['val_get_top']],
+    get_top=[hparams['tr_get_top'],
+             hparams['val_get_top'],
+             hparams['val_get_top']],
     return_items=hparams['return_items']
 )
 
 # define the losses that are going to be used
 back_loss_tr_loss_name, back_loss_tr_loss = (
-    'tr_back_loss_SISDR',
+    'tr_back_loss_SISDRi',
     sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                 n_sources=n_sources,
+                                 n_sources=hparams['n_sources'],
                                  zero_mean=True,
-                                 backward_loss=True))
+                                 backward_loss=True,
+                                 improvement=True))
 
 val_losses = dict([
     ('val_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                               n_sources=n_sources,
+                                               n_sources=hparams['n_sources'],
                                                zero_mean=True,
                                                backward_loss=False)),
+    ('val_SISDRi', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                                n_sources=hparams['n_sources'],
+                                                zero_mean=True,
+                                                backward_loss=False,
+                                                improvement=True)),
     ('val_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
                                                   n_sources=1,
                                                   zero_mean=True,
@@ -124,17 +145,18 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
 
 
 model = tasnet_wrapper.TasNetFrontendsWrapper(
-    in_samples,
+    hparams['in_samples'],
     pretrained_encoder=None,
     pretrained_decoder=None,
-    n_sources=n_sources,
+    n_sources=hparams['n_sources'],
     B=hparams['B'],
     H=hparams['H'],
     P=hparams['P'],
     R=hparams['R'],
     X=hparams['X'],
     L=hparams['n_kernel'],
-    N=hparams['n_basis'])
+    N=hparams['n_basis'],
+    norm=hparams['norm'])
 
 numparams = 0
 for f in model.parameters():
@@ -155,7 +177,10 @@ for loss_name in all_losses:
 tr_step = 0
 val_step = 0
 for i in range(hparams['n_epochs']):
-    print("Epoch: {}/{}".format(i+1, hparams['n_epochs']))
+    print("Experiment: {} - {} || Epoch: {}/{}".format(experiment.get_key(),
+                                                       experiment.get_tags(),
+                                                       i+1,
+                                                       hparams['n_epochs']))
     model.train()
 
     for data in tqdm(train_gen, desc='Training'):
@@ -163,8 +188,12 @@ for i in range(hparams['n_epochs']):
         m1wavs = data[0].unsqueeze(1).cuda()
         clean_wavs = data[-1].cuda()
 
+        print(m1wavs.shape)
         _, rec_sources_wavs = model(m1wavs, return_wavs=True)
-        l = back_loss_tr_loss(rec_sources_wavs, clean_wavs)
+        print(m1wavs.shape)
+        l = back_loss_tr_loss(rec_sources_wavs,
+                              clean_wavs,
+                              initial_mixtures=m1wavs)
         l.backward()
         opt.step()
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
@@ -177,32 +206,41 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
+                AE_rec_mixture = None
                 for loss_name, loss_func in val_losses.items():
                     if 'AE' in loss_name:
                         AE_rec_mixture = model.AE_recontruction(m1wavs)
-                        l = loss_func(AE_rec_mixture, m1wavs)
+                        l = loss_func(AE_rec_mixture,
+                                      m1wavs,
+                                      initial_mixtures=m1wavs)
                     else:
                         rec_wavs = model.infer_source_signals(m1wavs)
                         l = loss_func(rec_wavs, clean_wavs)
                     res_dic[loss_name]['acc'].append(l.item())
-
+            if hparams["log_path"] is not None:
+                audio_logger.log_batch(rec_wavs,
+                                       clean_wavs,
+                                       m1wavs,
+                                       mixture_rec=AE_rec_mixture)
         val_step += 1
 
-    if train_losses.values():
-        model.eval()
-        with torch.no_grad():
-            for data in tqdm(train_gen, desc='Train Validation'):
-                m1wavs = data[0].unsqueeze(1).cuda()
-                clean_wavs = data[-1].cuda()
-
-                for loss_name, loss_func in val_losses.items():
-                    if 'AE' in loss_name:
-                        AE_rec_mixture = model.AE_recontruction(m1wavs)
-                        l = loss_func(AE_rec_mixture, m1wavs)
-                    else:
-                        rec_wavs = model.infer_source_signals(m1wavs)
-                        l = loss_func(rec_wavs, clean_wavs)
-                    res_dic[loss_name]['acc'].append(l.item())
+    # if train_losses.values():
+    #     model.eval()
+    #     with torch.no_grad():
+    #         for data in tqdm(train_val_gen, desc='Train Validation'):
+    #             m1wavs = data[0].unsqueeze(1).cuda()
+    #             clean_wavs = data[-1].cuda()
+    #
+    #             for loss_name, loss_func in val_losses.items():
+    #                 if 'AE' in loss_name:
+    #                     AE_rec_mixture = model.AE_recontruction(m1wavs)
+    #                     l = loss_func(AE_rec_mixture, m1wavs)
+    #                 else:
+    #                     rec_wavs = model.infer_source_signals(m1wavs)
+    #                     l = loss_func(rec_wavs,
+    #                                   clean_wavs,
+    #                                   initial_mixtures=m1wavs)
+    #                 res_dic[loss_name]['acc'].append(l.item())
 
     res_dic = cometml_report.report_losses_mean_and_std(res_dic,
                                                         experiment,
