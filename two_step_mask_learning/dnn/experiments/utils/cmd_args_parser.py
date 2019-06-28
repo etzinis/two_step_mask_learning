@@ -55,6 +55,14 @@ def get_args():
                         available for running this experiment""",
                         default=['0'],
                         choices=['0', '1', '2', '3'])
+    # Adaptive front-end parameters
+    parser.add_argument("-afe_reg", "--adaptive_fe_regularizer", type=str,
+                        help="""regularization on the trained basis.""",
+                        default=None,
+                        choices=['compositionality',
+                                 'softmax',
+                                 'binarized'])
+
     # model params
     parser.add_argument("-N", "--n_basis", type=int,
                         help="Dim of encoded representation",
@@ -80,6 +88,9 @@ def get_args():
     parser.add_argument("-norm", "--norm_type", type=str,
                         help="""The type of the applied normalization layer.""",
                         default="gln", choices=['bn', 'gln'])
+    parser.add_argument("-version", "--tasnet_version", type=str,
+                        help="""The type of Tasnet you want to run.""",
+                        default="simplified", choices=['full', 'simplified'])
     # training params
     parser.add_argument("-bs", "--batch_size", type=int,
                         help="""The number of samples in each batch. 
