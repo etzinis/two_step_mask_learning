@@ -17,10 +17,13 @@ class TNEncoder(nn.Module):
         self.conv = nn.Conv1d(1, enc_channels, kernel_size,
                               stride=kernel_size // 2,
                               padding=(kernel_size-1)//2,
-                              bias=False)
+                              bias=True
+                              )
+        # self.out_activation = nn.Softplus()
+        self.out_activation = nn.ReLU()
 
     def forward(self, x):
-        w = F.relu(self.conv(x))
+        w = self.out_activation(self.conv(x))
         return w
 
 
@@ -38,13 +41,14 @@ class TNDConvLayer(nn.Module):
 
     '''
 
-    def __init__(self, out_channels, kernel_size, dilation):
+    def __init__(self, out_channels, kernel_size, dilation, groups=1):
         super().__init__()
         self.conv = nn.Conv1d(out_channels, out_channels,
                               kernel_size,
                               padding=dilation * (kernel_size - 1) // 2,
-                              dilation=dilation, groups=out_channels,
-                              bias=False)
+                              dilation=dilation, groups=1,
+                              bias=True
+                              )
 
     def forward(self, x):
         out = self.conv(x)
@@ -97,27 +101,37 @@ class TNSConvBlock(nn.Module):
     '''
 
     def __init__(self, in_channels, out_channels, kernel_size, depth,
-                 norm='gln'):
+                 norm='gln', version='simplified'):
         super().__init__()
-        self.in_conv = nn.Conv1d(in_channels, out_channels, 1)
-        self.dconv = TNDConvLayer(out_channels, kernel_size, 2 ** depth)
-        self.out_conv = nn.Conv1d(out_channels, in_channels, 1)
-        self.in_prelu = nn.PReLU(out_channels)
-        self.out_prelu = nn.PReLU(out_channels)
-        self.in_norm = get_norm_layer(norm_type=norm,
-                                      num_parameters=out_channels)
-        self.out_norm = get_norm_layer(norm_type=norm,
-                                      num_parameters=out_channels)
+        if version == "full":
+            self.in_conv = nn.Conv1d(in_channels, out_channels, 1)
+            self.dconv = TNDConvLayer(out_channels, kernel_size,
+                                      2 ** depth, groups=out_channels)
+            self.out_conv = nn.Conv1d(out_channels, in_channels, 1)
+            self.in_activation = nn.PReLU(out_channels)
+            self.out_activation = nn.PReLU(out_channels)
+            self.in_norm = get_norm_layer(norm_type=norm,
+                                          num_parameters=out_channels)
+            self.out_norm = get_norm_layer(norm_type=norm,
+                                           num_parameters=out_channels)
+            self.modules_l = [self.in_conv, self.in_activation, self.in_norm,
+                              self.dconv,
+                              self.out_activation, self.out_norm, self.out_conv]
+
+        elif version == "simplified":
+            self.dconv = TNDConvLayer(out_channels, kernel_size, 2 ** depth,
+                                      groups=1)
+            self.out_activation = nn.PReLU(out_channels)
+            self.out_norm = get_norm_layer(norm_type=norm,
+                                           num_parameters=out_channels)
+            # self.out_norm = get_norm_layer(norm_type='both',
+            #                                num_parameters=out_channels)
+            self.modules_l = [self.dconv, self.out_activation, self.out_norm]
 
     def forward(self, x):
-        inp = x
-        x = self.in_conv(x)
-        x = self.in_prelu(x)
-        x = self.in_norm(x)
-        x = self.dconv(x)
-        x = self.out_prelu(x)
-        x = self.out_norm(x)
-        x = self.out_conv(x)
+        inp = x.clone()
+        for m in self.modules_l:
+            x = m(x)
         return inp + x
 
 
@@ -126,6 +140,9 @@ def get_norm_layer(norm_type='', num_parameters=None):
         return GlobalLayerNorm(num_parameters)
     elif norm_type.lower() == 'bn':
         return nn.BatchNorm1d(num_parameters)
+    elif norm_type.lower() == 'both':
+        return nn.Sequential(GlobalLayerNorm(num_parameters),
+                             nn.BatchNorm1d(num_parameters))
     else:
         raise NotImplementedError("Norm Type: {}  or Number of Parameters: {} "
                                   "is not available or invalid, respectively."
@@ -151,16 +168,31 @@ class TNSeparationModule(nn.Module):
             norm: The type of the applied normalization layer
     '''
 
-    def __init__(self, N=256, B=256, H=512, P=3, X=8, R=4, C=2, norm="gln"):
+    def __init__(self, N=256, B=256, H=512, P=3, X=8, R=4, C=2,
+                 norm="gln", version='simplified'):
         super().__init__()
         self.C = C
-        self.input_norm = get_norm_layer(norm_type=norm, num_parameters=N)
-        self.bottleneck_conv = nn.Conv1d(N, B, 1)
-        self.blocks = nn.ModuleList()
-        for r in range(R):
-            for x in range(X):
-                self.blocks.append(TNSConvBlock(B, H, P, x, norm=norm))
-        self.out_conv = nn.Conv1d(B, N * C, 1)
+        self.input_norm = get_norm_layer(norm_type="bn", num_parameters=N)
+        if version == 'simplified':
+            self.bottleneck_conv = nn.Conv1d(N, H, 1)
+            self.blocks = nn.ModuleList()
+            for r in range(R):
+                for x in range(X):
+                    self.blocks.append(TNSConvBlock(B, H, P, x,
+                                                    norm=norm, version=version))
+            self.out_conv = nn.Conv1d(H, N * C, 1)
+
+        elif version == 'full':
+            self.bottleneck_conv = nn.Conv1d(N, B, 1)
+            self.blocks = nn.ModuleList()
+            for r in range(R):
+                for x in range(X):
+                    self.blocks.append(TNSConvBlock(B, H, P, x,
+                                                    norm=norm, version=version))
+            self.out_conv = nn.Conv1d(B, N * C, 1)
+        else:
+            raise NotImplementedError("Version: {} is not available."
+                                      "".format(version))
 
     def forward(self, x):
         x = self.input_norm(x)
@@ -207,7 +239,8 @@ class TasNetFrontendsWrapper(nn.Module):
                  X=8,
                  R=4,
                  n_sources=2,
-                 norm='gln'):
+                 norm='gln',
+                 version='simplified'):
         super().__init__()
 
         if (pretrained_encoder is not None and
@@ -238,7 +271,8 @@ class TasNetFrontendsWrapper(nn.Module):
             self.decoder = nn.ConvTranspose1d(self.n_basis, 1, self.k_size,
                                               stride=self.k_size // 2,
                                               padding=(self.k_size-1)//2,
-                                              bias=False)
+                                              bias=True
+                                              )
             self.n_time_frames = int(
                 (in_samples - (self.k_size - 1) - 1) / (self.k_size // 2) + 1)
 
@@ -256,7 +290,8 @@ class TasNetFrontendsWrapper(nn.Module):
                                              X=self.X,
                                              R=self.R,
                                              C=self.n_sources,
-                                             norm=norm)
+                                             norm=norm,
+                                             version=version)
 
     def get_encoded_mixture(self, mixture_wav):
         return self.encoder(mixture_wav)
