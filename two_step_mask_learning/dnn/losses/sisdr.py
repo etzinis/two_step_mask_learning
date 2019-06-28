@@ -10,6 +10,59 @@ import torch.nn as nn
 import itertools
 
 
+def _sdr( y, z, SI=False):
+    if SI:
+        a = ((z*y).mean(-1) / (y*y).mean(-1)).unsqueeze(-1) * y
+        return 10*torch.log10( (a**2).mean(-1) / ((a-z)**2).mean(-1))
+    else:
+        return 10*torch.log10( (y*y).mean(-1) / ((y-z)**2).mean(-1))
+
+# Negative SDRi loss
+def sdri_loss( y, z, of=0):
+    # Add a batch dimension if it's missing
+    if len( y.shape) < 3:
+        y = y.unsqueeze(0)
+    if len( z.shape) < 3:
+        z = z.unsqueeze(0)
+
+    s = _sdr( y, z, SI=False) - of
+    return -s.mean()
+
+# Negative SI-SDRi loss
+def sisdr_loss( y, z, of=0):
+    # Add a batch dimension if it's missing
+    if len( y.shape) < 3:
+        y = y.unsqueeze(0)
+    if len( z.shape) < 3:
+        z = z.unsqueeze(0)
+
+    s = _sdr( y, z, SI=True) - of
+    return -s.mean()
+
+# Negative PIT loss
+def pit_loss( y, z, of=0, SI=False):
+    from itertools import permutations
+
+    # Add a batch dimension if it's missing
+    if len( y.shape) < 3:
+        y = y.unsqueeze(0)
+    if len( z.shape) < 3:
+        z = z.unsqueeze(0)
+
+    # Get all possible target source permutation SDRs and stack them
+    p = list( permutations( range( y.shape[-2])))
+    s = torch.stack( [_sdr( y[:,j,:], z, SI) for j in p], dim=2)
+
+    # Get source-average SDRi
+    # s = (s - of.unsqueeze(2)).mean(1)
+    s = s.mean(1)
+
+    # Find and return permutation with highest SDRi (negate since we are minimizing)
+    i = s.argmax(-1)
+    j = torch.arange( s.shape[0], dtype=torch.long, device=i.device)
+    return -s[j,i].mean()
+
+
 class PermInvariantSISDR(nn.Module):
     """!
     Class for SISDR computation between reconstructed signals and
