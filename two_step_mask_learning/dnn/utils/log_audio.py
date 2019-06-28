@@ -70,10 +70,14 @@ class AudioLogger(object):
                 wavwrite(os.path.join(self.dirpath, rec_s_name),
                          self.fs,
                          rec_wav)
-            if mixture_rec is not None:
+
+        if mixture_rec is not None:
+            mixture_rec_np = mixture_rec.detach().cpu().numpy()
+            for b_ind in range(self.bs):
                 rec_mix_name = "bind_{}_rec_mix.wav".format(b_ind)
-                rec_mix_wav = (mixture_rec[b_ind] /
-                               (np.max(np.abs(mixture_rec[b_ind])) + 10e-8))
+                rec_mix_wav = (mixture_rec_np[b_ind][0] /
+                               (np.max(np.abs(mixture_rec_np[b_ind][0])) +
+                                10e-8))
                 wavwrite(os.path.join(self.dirpath, rec_mix_name),
                          self.fs,
                          rec_mix_wav)
