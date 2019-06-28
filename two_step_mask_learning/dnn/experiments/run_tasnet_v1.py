@@ -30,7 +30,8 @@ import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 
 
 args = parser.get_args()
-
+torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.enabled = False
 
 hparams = {
     "train_dataset": args.train,
@@ -54,7 +55,8 @@ hparams = {
     "learning_rate": args.learning_rate,
     "return_items": args.return_items,
     "tags": args.cometml_tags,
-    "log_path": args.experiment_logs_path
+    "log_path": args.experiment_logs_path,
+    "tasnet_version": args.tasnet_version
 }
 
 if (hparams['train_dataset'] == 'WSJ2MIX8K' and
@@ -83,7 +85,7 @@ if hparams["log_path"] is not None:
                                          hparams["fs"],
                                          hparams["bs"],
                                          hparams["n_sources"])
-
+#
 experiment = Experiment(API_KEY,
                         project_name=hparams['project_name'])
 experiment.log_parameters(hparams)
@@ -117,6 +119,14 @@ back_loss_tr_loss_name, back_loss_tr_loss = (
                                  zero_mean=True,
                                  backward_loss=True,
                                  improvement=True))
+
+# back_loss_tr_loss_name, back_loss_tr_loss = (
+#     'tr_back_loss_SISDRi',
+#     sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+#                                  n_sources=hparams['n_sources'],
+#                                  zero_mean=True,
+#                                  backward_loss=True,
+#                                  improvement=False))
 
 val_losses = dict([
     ('val_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
@@ -156,7 +166,8 @@ model = tasnet_wrapper.TasNetFrontendsWrapper(
     X=hparams['X'],
     L=hparams['n_kernel'],
     N=hparams['n_basis'],
-    norm=hparams['norm'])
+    norm=hparams['norm'],
+    version=hparams['tasnet_version'])
 
 numparams = 0
 for f in model.parameters():
@@ -188,9 +199,7 @@ for i in range(hparams['n_epochs']):
         m1wavs = data[0].unsqueeze(1).cuda()
         clean_wavs = data[-1].cuda()
 
-        print(m1wavs.shape)
         _, rec_sources_wavs = model(m1wavs, return_wavs=True)
-        print(m1wavs.shape)
         l = back_loss_tr_loss(rec_sources_wavs,
                               clean_wavs,
                               initial_mixtures=m1wavs)
@@ -215,7 +224,9 @@ for i in range(hparams['n_epochs']):
                                       initial_mixtures=m1wavs)
                     else:
                         rec_wavs = model.infer_source_signals(m1wavs)
-                        l = loss_func(rec_wavs, clean_wavs)
+                        l = loss_func(rec_wavs,
+                                      clean_wavs,
+                                      initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'].append(l.item())
             if hparams["log_path"] is not None:
                 audio_logger.log_batch(rec_wavs,
