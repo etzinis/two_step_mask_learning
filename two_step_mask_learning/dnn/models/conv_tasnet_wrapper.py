@@ -17,9 +17,7 @@ class TNEncoder(nn.Module):
         self.conv = nn.Conv1d(1, enc_channels, kernel_size,
                               stride=kernel_size // 2,
                               padding=(kernel_size-1)//2,
-                              bias=True
-                              )
-        # self.out_activation = nn.Softplus()
+                              bias=False)
         self.out_activation = nn.ReLU()
 
     def forward(self, x):
@@ -46,9 +44,8 @@ class TNDConvLayer(nn.Module):
         self.conv = nn.Conv1d(out_channels, out_channels,
                               kernel_size,
                               padding=dilation * (kernel_size - 1) // 2,
-                              dilation=dilation, groups=1,
-                              bias=True
-                              )
+                              dilation=dilation, groups=groups,
+                              bias=False)
 
     def forward(self, x):
         out = self.conv(x)
@@ -108,8 +105,8 @@ class TNSConvBlock(nn.Module):
             self.dconv = TNDConvLayer(out_channels, kernel_size,
                                       2 ** depth, groups=out_channels)
             self.out_conv = nn.Conv1d(out_channels, in_channels, 1)
-            self.in_activation = nn.PReLU(out_channels)
-            self.out_activation = nn.PReLU(out_channels)
+            self.in_activation = nn.PReLU()
+            self.out_activation = nn.PReLU()
             self.in_norm = get_norm_layer(norm_type=norm,
                                           num_parameters=out_channels)
             self.out_norm = get_norm_layer(norm_type=norm,
@@ -121,15 +118,13 @@ class TNSConvBlock(nn.Module):
         elif version == "simplified":
             self.dconv = TNDConvLayer(out_channels, kernel_size, 2 ** depth,
                                       groups=1)
-            self.out_activation = nn.PReLU(out_channels)
+            self.out_activation = nn.PReLU()
             self.out_norm = get_norm_layer(norm_type=norm,
                                            num_parameters=out_channels)
-            # self.out_norm = get_norm_layer(norm_type='both',
-            #                                num_parameters=out_channels)
             self.modules_l = [self.dconv, self.out_activation, self.out_norm]
 
     def forward(self, x):
-        inp = x.clone()
+        inp = x
         for m in self.modules_l:
             x = m(x)
         return inp + x
@@ -172,36 +167,41 @@ class TNSeparationModule(nn.Module):
                  norm="gln", version='simplified'):
         super().__init__()
         self.C = C
-        self.input_norm = get_norm_layer(norm_type="bn", num_parameters=N)
+        # self.input_norm = get_norm_layer(norm_type=norm, num_parameters=N)
+        self.input_norm = nn.LayerNorm(N)
         if version == 'simplified':
-            self.bottleneck_conv = nn.Conv1d(N, H, 1)
+            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=False)
             self.blocks = nn.ModuleList()
             for r in range(R):
                 for x in range(X):
-                    self.blocks.append(TNSConvBlock(B, H, P, x,
+                    self.blocks.append(TNSConvBlock(B, B, P, x,
                                                     norm=norm, version=version))
-            self.out_conv = nn.Conv1d(H, N * C, 1)
 
         elif version == 'full':
-            self.bottleneck_conv = nn.Conv1d(N, B, 1)
+            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=False)
             self.blocks = nn.ModuleList()
             for r in range(R):
                 for x in range(X):
                     self.blocks.append(TNSConvBlock(B, H, P, x,
                                                     norm=norm, version=version))
-            self.out_conv = nn.Conv1d(B, N * C, 1)
         else:
             raise NotImplementedError("Version: {} is not available."
                                       "".format(version))
+        self.out_conv = nn.Conv2d(in_channels=1,
+                                  out_channels=C,
+                                  kernel_size=(N + 1, 1),
+                                  padding=(N - B // 2, 0))
 
     def forward(self, x):
+        x = x.contiguous().transpose(1, 2)
         x = self.input_norm(x)
+        x = x.contiguous().transpose(1, 2)
         m = self.bottleneck_conv(x)
         for i in range(len(self.blocks)):
             m = self.blocks[i](m)
 
-        m = self.out_conv(m)
-        m = m.unsqueeze(1).contiguous().view(m.shape[0], self.C, -1, m.shape[-1])
+        m = self.out_conv(m.unsqueeze(1))
+        # m = m.unsqueeze(1).contiguous().view(m.shape[0], self.C, -1, m.shape[-1])
         m = F.softmax(m, dim=1)
         return m
 
@@ -271,8 +271,7 @@ class TasNetFrontendsWrapper(nn.Module):
             self.decoder = nn.ConvTranspose1d(self.n_basis, 1, self.k_size,
                                               stride=self.k_size // 2,
                                               padding=(self.k_size-1)//2,
-                                              bias=True
-                                              )
+                                              bias=False)
             self.n_time_frames = int(
                 (in_samples - (self.k_size - 1) - 1) / (self.k_size // 2) + 1)
 
