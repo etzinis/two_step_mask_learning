@@ -41,8 +41,6 @@ def sisdr_loss( y, z, of=0):
 
 # Negative PIT loss
 def pit_loss( y, z, of=0, SI=False):
-    from itertools import permutations
-
     # Add a batch dimension if it's missing
     if len( y.shape) < 3:
         y = y.unsqueeze(0)
@@ -50,7 +48,7 @@ def pit_loss( y, z, of=0, SI=False):
         z = z.unsqueeze(0)
 
     # Get all possible target source permutation SDRs and stack them
-    p = list( permutations( range( y.shape[-2])))
+    p = list( itertools.permutations( range( y.shape[-2])))
     s = torch.stack( [_sdr( y[:,j,:], z, SI) for j in p], dim=2)
 
     # Get source-average SDRi
