@@ -120,14 +120,6 @@ back_loss_tr_loss_name, back_loss_tr_loss = (
                                  backward_loss=True,
                                  improvement=True))
 
-# back_loss_tr_loss_name, back_loss_tr_loss = (
-#     'tr_back_loss_SISDRi',
-#     sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-#                                  n_sources=hparams['n_sources'],
-#                                  zero_mean=True,
-#                                  backward_loss=True,
-#                                  improvement=False))
-
 val_losses = dict([
     ('val_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
                                                n_sources=hparams['n_sources'],
@@ -143,12 +135,6 @@ val_losses = dict([
                                                   zero_mean=True,
                                                   backward_loss=False))
   ])
-
-train_losses = dict([
-    ('tr_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                                 n_sources=1,
-                                                 zero_mean=True,
-                                                 backward_loss=False))])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -177,9 +163,7 @@ experiment.log_parameter('Parameters', numparams)
 
 model.cuda()
 opt = torch.optim.Adam(model.parameters(), lr=hparams['learning_rate'])
-all_losses = [back_loss_tr_loss_name] + \
-             [k for k in sorted(train_losses.keys())] + \
-             [k for k in sorted(val_losses.keys())]
+all_losses = [back_loss_tr_loss_name] + [k for k in sorted(val_losses.keys())]
 
 res_dic = {}
 for loss_name in all_losses:
@@ -188,6 +172,8 @@ for loss_name in all_losses:
 tr_step = 0
 val_step = 0
 for i in range(hparams['n_epochs']):
+    for loss_name in all_losses:
+        res_dic[loss_name] = {'mean': 0., 'std': 0., 'acc': []}
     print("Experiment: {} - {} || Epoch: {}/{}".format(experiment.get_key(),
                                                        experiment.get_tags(),
                                                        i+1,
@@ -234,24 +220,6 @@ for i in range(hparams['n_epochs']):
                                        m1wavs,
                                        mixture_rec=AE_rec_mixture)
         val_step += 1
-
-    # if train_losses.values():
-    #     model.eval()
-    #     with torch.no_grad():
-    #         for data in tqdm(train_val_gen, desc='Train Validation'):
-    #             m1wavs = data[0].unsqueeze(1).cuda()
-    #             clean_wavs = data[-1].cuda()
-    #
-    #             for loss_name, loss_func in val_losses.items():
-    #                 if 'AE' in loss_name:
-    #                     AE_rec_mixture = model.AE_recontruction(m1wavs)
-    #                     l = loss_func(AE_rec_mixture, m1wavs)
-    #                 else:
-    #                     rec_wavs = model.infer_source_signals(m1wavs)
-    #                     l = loss_func(rec_wavs,
-    #                                   clean_wavs,
-    #                                   initial_mixtures=m1wavs)
-    #                 res_dic[loss_name]['acc'].append(l.item())
 
     res_dic = cometml_report.report_losses_mean_and_std(res_dic,
                                                         experiment,
