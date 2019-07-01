@@ -19,6 +19,8 @@ from pprint import pprint
 import two_step_mask_learning.dnn.dataset_loader.torch_dataloader as dataloader
 from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_P, \
     WSJ_MIX_2_8K_PREPROCESSED_TEST_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
+from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P, \
+    WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
 from __config__ import TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P, \
     TIMIT_MIX_2_8K_PREPROCESSED_TEST_P, TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
@@ -59,6 +61,13 @@ if (hparams['train_dataset'] == 'WSJ2MIX8K' and
     hparams['fs'] = 8000.
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
+elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
+    hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
+    hparams['in_samples'] = 32000
+    hparams['n_sources'] = 2
+    hparams['fs'] = 8000.
+    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
+    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
 elif(hparams['train_dataset'] == 'TIMITMF8K' and
      hparams['val_dataset'] == 'TIMITMF8K'):
     hparams['in_samples'] = 16000
@@ -72,7 +81,6 @@ else:
     raise NotImplementedError('Datasets: {}, {} are not available'
                               ''.format(hparams['train_dataset'],
                                         hparams['val_dataset']))
-
 if hparams["log_path"] is not None:
     audio_logger = log_audio.AudioLogger(hparams["log_path"],
                                          hparams["fs"],
@@ -122,18 +130,8 @@ val_losses = dict([
                                                 n_sources=hparams['n_sources'],
                                                 zero_mean=True,
                                                 backward_loss=False,
-                                                improvement=True)),
-    ('val_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                                  n_sources=1,
-                                                  zero_mean=True,
-                                                  backward_loss=False))
+                                                improvement=True))
   ])
-
-train_losses = dict([
-    ('tr_SISDR_AE', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                                 n_sources=1,
-                                                 zero_mean=True,
-                                                 backward_loss=False))])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -142,8 +140,8 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
 model = adaptive_fe.AdaptiveModulatorConvAE(
     hparams['n_basis'],
     hparams['n_kernel'],
-    return_masks=True,
-    regularizers=hparams['afe_reg'])
+    regularizer=hparams['afe_reg'],
+    n_sources=hparams['n_sources'])
 
 numparams = 0
 for f in model.parameters():
@@ -153,17 +151,14 @@ experiment.log_parameter('Parameters', numparams)
 
 model.cuda()
 opt = torch.optim.Adam(model.parameters(), lr=hparams['learning_rate'])
-all_losses = [back_loss_tr_loss_name] + \
-             [k for k in sorted(train_losses.keys())] + \
-             [k for k in sorted(val_losses.keys())]
-
-res_dic = {}
-for loss_name in all_losses:
-    res_dic[loss_name] = {'mean': 0., 'std': 0., 'acc': []}
+all_losses = [back_loss_tr_loss_name] + [k for k in sorted(val_losses.keys())]
 
 tr_step = 0
 val_step = 0
 for i in range(hparams['n_epochs']):
+    res_dic = {}
+    for loss_name in all_losses:
+        res_dic[loss_name] = {'mean': 0., 'std': 0., 'acc': []}
     print("Adaptive Exp: {} - {} || Epoch: {}/{}".format(experiment.get_key(),
                                                          experiment.get_tags(),
                                                          i+1,
@@ -192,9 +187,6 @@ for i in range(hparams['n_epochs']):
                 clean_wavs = data[-1].cuda()
 
                 recon_sources, enc_masks = model(m1wavs, clean_wavs)
-                l = back_loss_tr_loss(recon_sources,
-                                      clean_wavs,
-                                      initial_mixtures=m1wavs)
 
                 AE_rec_mixture = None
                 for loss_name, loss_func in val_losses.items():
