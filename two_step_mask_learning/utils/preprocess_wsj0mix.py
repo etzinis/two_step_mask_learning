@@ -83,10 +83,11 @@ def infer_output_name(input_dirpath, wav_timelength):
         assert (min_or_max == 'min' or min_or_max == 'max')
         fs = int(elements[-2].strip('wav').strip('k')) * 1000
         n_speakers = int(elements[-3].strip("speakers"))
-        output_name = "wsj0_{}mix_{}k_{}s_min_preprocessed".format(
+        output_name = "wsj0_{}mix_{}k_{}s_{}_preprocessed".format(
             n_speakers,
             fs / 1000.,
-            float(wav_timelength))
+            float(wav_timelength),
+            min_or_max)
 
         # test that the inferred output name is parsable back
         (inf_min_or_max,
@@ -98,7 +99,7 @@ def infer_output_name(input_dirpath, wav_timelength):
                inf_fs == fs and
                inf_wav_timelength == wav_timelength)
 
-        return output_name, fs, n_speakers
+        return output_name, fs, n_speakers, min_or_max
 
     except:
         raise IOError("The structure of the wsj0-mix is not in the right "
@@ -106,23 +107,25 @@ def infer_output_name(input_dirpath, wav_timelength):
                 "wsj0-mix/{2 or 3}speakers/wav{fs in Hz}k/{min or max}")
 
 
-def normalize_wav(wav, eps=10e-7):
+def normalize_wav(wav, eps=10e-7, std=None):
     mean = wav.mean()
-    std = wav.std()
-    # std = 1.
+    if std is None:
+        std = wav.std()
     return (wav - mean) / (std + eps)
 
 
 def write_data_wrapper_func(input_dirpath,
                             clean_folders,
                             max_wav_samples,
-                            output_dirpath):
+                            output_dirpath,
+                            min_or_max=None):
 
     def process_uid(uid):
         mix_path = os.path.join(input_dirpath, 'mix', uid)
         mix_wav = wavfile.read(mix_path)[1] / 29491.
-        # mix_wav = normalize_wav(mix_wav)
+
         mix_wav = torch.tensor(mix_wav, dtype=torch.float32)
+
         sources_paths = [os.path.join(input_dirpath, fo, uid)
                          for fo in clean_folders]
         sources_w_list = [wavfile.read(p)[1] / 29491.
@@ -135,15 +138,27 @@ def write_data_wrapper_func(input_dirpath,
         min_len = min(mix_wav.shape[-1], sources_wavs.shape[-1])
         if min_len < max_wav_samples:
             return
-
         mix_wav = mix_wav[:max_wav_samples]
+        mix_std = mix_wav.detach().cpu().numpy().std()
+        mix_wav_norm = torch.tensor(normalize_wav(mix_wav),
+                                    dtype=torch.float32)
         sources_wavs = sources_wavs[:, :max_wav_samples]
+
+        sources_w_list = [wavfile.read(p)[1] / 29491.
+                          for p in sources_paths]
+        sources_w_list_norm = [torch.tensor(normalize_wav(np_vec, std=mix_std),
+                                            dtype=torch.float32).unsqueeze(0)
+                               for np_vec in sources_w_list]
+        sources_wavs_norm = torch.cat(sources_w_list_norm, dim=0)
+        sources_wavs_norm = sources_wavs_norm[:, :max_wav_samples]
 
         output_uid_folder = os.path.join(output_dirpath, uid)
 
         data = {
             'mixture_wav': mix_wav,
-            'clean_sources_wavs': sources_wavs
+            'clean_sources_wavs': sources_wavs,
+            'mixture_wav_norm': mix_wav_norm,
+            'clean_sources_wavs_norm': sources_wavs_norm
         }
 
         if not os.path.exists(output_uid_folder):
@@ -161,7 +176,8 @@ def convert_subset(input_dirpath,
                    fs,
                    n_speakers,
                    wav_timelength,
-                   subset=None):
+                   subset=None,
+                   min_or_max=None):
     """! Convert a subset of files in the appropriate format
 
     Args:
@@ -193,7 +209,8 @@ def convert_subset(input_dirpath,
     write_data_func = write_data_wrapper_func(input_dirpath,
                                               clean_folders,
                                               max_wav_samples,
-                                              output_dirpath)
+                                              output_dirpath,
+                                              min_or_max=min_or_max)
 
     progress_display.progress_bar_wrapper(
         write_data_func,
@@ -225,8 +242,8 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
                      timelength:
                      it would be wsj0_2mix_8k_4s_min_preprocessed
     """
-    output_name, fs, n_speakers = infer_output_name(input_dirpath,
-                                                    wav_timelength)
+    output_name, fs, n_speakers, min_or_max = infer_output_name(
+        input_dirpath, wav_timelength)
 
     root_out_dir = os.path.join(output_dirpath, output_name)
 
@@ -240,13 +257,14 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
                        fs,
                        n_speakers,
                        wav_timelength,
-                       subset=subset)
+                       subset=subset,
+                       min_or_max=min_or_max)
 
     print("Dataset ready at: {}".format(root_out_dir))
 
 
 def example_of_usage():
-    input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/min'
+    input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/max'
     output_dirpath = '/mnt/nvme/wsj0_mix_preprocessed'
     wav_timelength = 4
     convert_wsj0mix_to_universal_dataset(input_dirpath,

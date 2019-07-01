@@ -15,11 +15,11 @@ def get_args():
     parser.add_argument("--train", type=str,
                         help="Training dataset",
                         default='WSJ2MIX8K',
-                        choices=['WSJ2MIX8K', 'TIMITMF8K'])
+                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD', 'TIMITMF8K'])
     parser.add_argument("--val", type=str,
                         help="Validation dataset",
                         default='WSJ2MIX8K',
-                        choices=['WSJ2MIX8K', 'TIMITMF8K'])
+                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD', 'TIMITMF8K'])
     parser.add_argument("-elp", "--experiment_logs_path", type=str,
                         help="""Path for logging experiment's audio.""",
                         default=None)
@@ -36,7 +36,10 @@ def get_args():
                         names which are available. There is no type 
                         checking in this return argument.""",
                         default=['mixture_wav', 'clean_sources_wavs'],
-                        choices=['mixture_wav', 'clean_sources_wavs'])
+                        choices=['mixture_wav',
+                                 'clean_sources_wavs',
+                                 'mixture_wav_norm',
+                                 'clean_sources_wavs_norm'])
     parser.add_argument("-tags", "--cometml_tags", type=str,
                         nargs="+", help="""A list of tags for the cometml 
                         experiment.""",
