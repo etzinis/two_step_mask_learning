@@ -49,14 +49,15 @@ class AdaptiveDecoder1D(nn.Module):
     sample_res: length of the encoding filter
     '''
 
-    def __init__(self, freq_res, sample_res):
+    def __init__(self, freq_res, sample_res, n_sources):
         super().__init__()
-        self.deconv = nn.ConvTranspose1d(freq_res,
-                                         1,
+        self.deconv = nn.ConvTranspose1d(n_sources * freq_res,
+                                         n_sources,
                                          sample_res,
                                          padding=sample_res // 2,
                                          stride=sample_res // 2,
-                                         groups=1)
+                                         groups=n_sources,
+                                         output_padding=(sample_res // 2) - 1)
 
     def forward(self, x):
         return self.deconv(x)
@@ -102,27 +103,27 @@ class AdaptiveModulatorConvAE(nn.Module):
     def __init__(self,
                  freq_res=256,
                  sample_res=20,
-                 return_masks=False,
-                 regularizers=None):
+                 regularizer=None,
+                 n_sources=2):
         super().__init__()
         self.mix_encoder = AdaptiveEncoder1D(freq_res, sample_res)
         self.modulator_encoder = ModulatorMask1D(freq_res, sample_res)
-        self.decoder = AdaptiveDecoder1D(freq_res, sample_res)
-        self.return_masks = return_masks
+        self.decoder = AdaptiveDecoder1D(freq_res, sample_res, n_sources)
+        self.n_sources = n_sources
         self.compositionality = False
         self.softmax_reg = False
         self.binarized_masks = False
-        if regularizers is not None:
-            if 'compositionality' in regularizers:
+
+        if regularizer is not None:
+            if regularizer == 'compositionality':
                 self.compositionality = True
-            elif 'binarized' in regularizers:
+            elif regularizer == 'binarized':
                 self.binarized_masks = True
-            elif 'softmax' in regularizers:
+            elif regularizer == 'softmax':
                 self.softmax_reg = True
             else:
                 raise NotImplementedError(
-                    "Regularizer values: {} are not implemented".format(
-                        regularizers))
+                    "Regularizer: {} is not implemented".format(regularizer))
 
     def get_target_masks(self, clean_sources):
         if self.compositionality:
@@ -166,14 +167,10 @@ class AdaptiveModulatorConvAE(nn.Module):
 
     def forward(self, mixture, clean_sources):
         enc_mixture = self.mix_encoder(mixture)
-        enc_mask1, enc_mask2 = self.get_target_masks(clean_sources)
-        enc_masks = torch.cat((enc_mask1.unsqueeze(1),
-                               enc_mask2.unsqueeze(1)), dim=1)
-        s1_recon_enc = enc_mask1 * enc_mixture
-        s2_recon_enc = enc_mask2 * enc_mixture
-        recon_sources = torch.cat((self.decoder(s1_recon_enc),
-                                   self.decoder(s2_recon_enc)), dim=1)
-        if self.return_masks:
-            return recon_sources, enc_masks
-        else:
-            return recon_sources
+        enc_masks = self.get_target_masks_tensor(clean_sources)
+
+        s_recon_enc = enc_masks * enc_mixture.unsqueeze(1)
+        recon_sources = self.decoder(s_recon_enc.view(s_recon_enc.shape[0],
+                                                      -1,
+                                                      s_recon_enc.shape[-1]))
+        return recon_sources, enc_masks
