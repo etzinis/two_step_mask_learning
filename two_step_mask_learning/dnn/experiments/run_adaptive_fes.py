@@ -23,6 +23,7 @@ from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P, \
     WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
 from __config__ import TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P, \
     TIMIT_MIX_2_8K_PREPROCESSED_TEST_P, TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
+from __config__ import AFE_WSJ_MIX_2_8K, AFE_WSJ_MIX_2_8K_PAD
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
 import two_step_mask_learning.dnn.models.adaptive_frontend as adaptive_fe
@@ -61,6 +62,7 @@ if (hparams['train_dataset'] == 'WSJ2MIX8K' and
     hparams['fs'] = 8000.
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
+    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K
 elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
     hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
     hparams['in_samples'] = 32000
@@ -68,6 +70,7 @@ elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
     hparams['fs'] = 8000.
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
+    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_PAD
 elif(hparams['train_dataset'] == 'TIMITMF8K' and
      hparams['val_dataset'] == 'TIMITMF8K'):
     hparams['in_samples'] = 16000
@@ -132,6 +135,7 @@ val_losses = dict([
                                                 backward_loss=False,
                                                 improvement=True))
   ])
+val_loss_name = 'val_SISDRi'
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -210,6 +214,10 @@ for i in range(hparams['n_epochs']):
                                                         experiment,
                                                         tr_step,
                                                         val_step)
+    adaptive_fe.AdaptiveModulatorConvAE.save_if_best(
+        hparams['afe_dir'], model, opt, tr_step,
+        res_dic[back_loss_tr_loss_name]['mean'],
+        res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
     for loss_name in res_dic:
         res_dic[loss_name]['acc'] = []
     pprint(res_dic)
