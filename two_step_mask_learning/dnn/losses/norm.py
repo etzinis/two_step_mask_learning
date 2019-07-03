@@ -18,7 +18,7 @@ class PermInvariantNorm(nn.Module):
     def __init__(self,
                  batch_size=None,
                  n_sources=2,
-                 zero_mean=False):
+                 weighted=False):
         """
         Initialization for the results and torch tensors that might
         be used afterwards
@@ -29,15 +29,14 @@ class PermInvariantNorm(nn.Module):
         """
         super().__init__()
         self.bs = batch_size
-        self.perform_zero_mean = zero_mean
+        self.weighted = weighted
         self.permutations = list(itertools.permutations(
             torch.arange(n_sources)))
 
     def forward(self,
                 pr_batch,
                 t_batch,
-                eps=1e-7,
-                weights=None):
+                eps=1e-7):
         """!
 
         :param pr_batch: Estimated signals: Torch Tensors of size:
@@ -48,33 +47,20 @@ class PermInvariantNorm(nn.Module):
 
         :returns normed loss for both forward and backward passes.
         """
-        min_len = min(pr_batch.shape[-1],
-                      t_batch.shape[-1])
-        pr_batch = pr_batch[:, :, :min_len]
-        t_batch = t_batch[:, :, :min_len]
-
-        if self.perform_zero_mean:
-            pr_batch = pr_batch - torch.mean(pr_batch,
-                                             dim=-1,
-                                             keepdim=True)
-            t_batch = t_batch - torch.mean(t_batch,
-                                           dim=-1,
-                                           keepdim=True)
-
         mse_l = []
         for perm in self.permutations:
             permuted_pr_batch = (pr_batch[:, perm, :])
-            if weights is None:
-                se = torch.abs(permuted_pr_batch - t_batch)
-            else:
-                se = torch.abs(weights.unsqueeze(1) ** 2
+            if self.weighted:
+                se = torch.abs(t_batch ** 2
                                * (permuted_pr_batch - t_batch))
-            se = se.view(se.shape[0], -1)
-            mse = torch.mean(se, dim=1)
+            else:
+                se = torch.abs(permuted_pr_batch - t_batch)
+
+            mse = torch.mean(se.view(se.shape[0], -1), dim=1)
             mse_l.append(mse)
 
         all_mses = torch.stack(mse_l, dim=1)
-        perm_inv_mses = torch.min(all_mses, 1)[0]
-        return perm_inv_mses.mean()
+        perm_inv_mses = torch.min(all_mses.mean(-2), -1)[0].mean()
+        return perm_inv_mses
 
 
