@@ -37,6 +37,7 @@ class AdaptiveEncoder1D(nn.Module):
         return F.relu(self.conv(s))
 
     def forward(self, signal):
+        # return self.conv(signal)
         return self.signal_adaptive_encoding(signal)
 
 
@@ -112,7 +113,7 @@ class AdaptiveModulatorConvAE(nn.Module):
         self.freq_res = freq_res
         self.sample_res = sample_res
         self.mix_encoder = AdaptiveEncoder1D(freq_res, sample_res)
-        self.modulator_encoder = ModulatorMask1D(freq_res, sample_res)
+        # self.modulator_encoder = ModulatorMask1D(freq_res, sample_res)
         self.decoder = AdaptiveDecoder1D(freq_res, sample_res, n_sources)
         self.n_sources = n_sources
         self.regularizer = regularizer
