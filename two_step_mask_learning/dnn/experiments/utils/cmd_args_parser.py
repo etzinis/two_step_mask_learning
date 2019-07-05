@@ -15,11 +15,13 @@ def get_args():
     parser.add_argument("--train", type=str,
                         help="Training dataset",
                         default='WSJ2MIX8K',
-                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD', 'TIMITMF8K'])
+                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD',
+                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD'])
     parser.add_argument("--val", type=str,
                         help="Validation dataset",
                         default='WSJ2MIX8K',
-                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD', 'TIMITMF8K'])
+                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD',
+                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD'])
     parser.add_argument("-elp", "--experiment_logs_path", type=str,
                         help="""Path for logging experiment's audio.""",
                         default=None)
@@ -91,6 +93,10 @@ def get_args():
     parser.add_argument("-norm", "--norm_type", type=str,
                         help="""The type of the applied normalization layer.""",
                         default="gln", choices=['bn', 'gln'])
+    parser.add_argument("--weighted_norm", type=str,
+                        help="""The type of weighting L1 in mask regression.""",
+                        default=None,
+                        choices=['simple', 'squared'])
     parser.add_argument("-version", "--tasnet_version", type=str,
                         help="""The type of Tasnet you want to run.""",
                         default="simplified", choices=['full', 'simplified'])
