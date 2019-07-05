@@ -23,11 +23,13 @@ from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P, \
     WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
 from __config__ import TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P, \
     TIMIT_MIX_2_8K_PREPROCESSED_TEST_P, TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
-from __config__ import AFE_WSJ_MIX_2_8K, AFE_WSJ_MIX_2_8K_PAD
+from __config__ import AFE_WSJ_MIX_2_8K, AFE_WSJ_MIX_2_8K_PAD, \
+    AFE_WSJ_MIX_2_8K_NORMPAD
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
 import two_step_mask_learning.dnn.models.adaptive_frontend as adaptive_fe
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
+import two_step_mask_learning.dnn.utils.cometml_learned_masks as masks_vis
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 
@@ -50,7 +52,7 @@ hparams = {
     "cuda_devs": args.cuda_available_devices,
     "n_epochs": args.n_epochs,
     "learning_rate": args.learning_rate,
-    "return_items": args.return_items,
+    # "return_items": args.return_items,
     "tags": args.cometml_tags,
     "log_path": args.experiment_logs_path
 }
@@ -63,6 +65,8 @@ if (hparams['train_dataset'] == 'WSJ2MIX8K' and
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
     hparams['afe_dir'] = AFE_WSJ_MIX_2_8K
+    hparams['return_items'] = ['mixture_wav',
+                               'clean_sources_wavs']
 elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
     hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
     hparams['in_samples'] = 32000
@@ -71,6 +75,18 @@ elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
     hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_PAD
+    hparams['return_items'] = ['mixture_wav',
+                               'clean_sources_wavs']
+elif (hparams['train_dataset'] == 'WSJ2MIX8KNORMPAD' and
+    hparams['val_dataset'] == 'WSJ2MIX8KNORMPAD'):
+    hparams['in_samples'] = 32000
+    hparams['n_sources'] = 2
+    hparams['fs'] = 8000.
+    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
+    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
+    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_NORMPAD
+    hparams['return_items'] = ['mixture_wav_norm',
+                               'clean_sources_wavs_norm']
 elif(hparams['train_dataset'] == 'TIMITMF8K' and
      hparams['val_dataset'] == 'TIMITMF8K'):
     hparams['in_samples'] = 16000
@@ -214,6 +230,13 @@ for i in range(hparams['n_epochs']):
                                                         experiment,
                                                         tr_step,
                                                         val_step)
+    masks_vis.create_and_log_afe_internal(
+        experiment,
+        enc_masks[0].detach().cpu().numpy(),
+        model.mix_encoder(m1wavs)[0].detach().cpu().numpy(),
+        model.mix_encoder.conv.weight.squeeze().detach().cpu().numpy(),
+        model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
+
     adaptive_fe.AdaptiveModulatorConvAE.save_if_best(
         hparams['afe_dir'], model, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
