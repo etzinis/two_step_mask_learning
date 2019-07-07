@@ -18,7 +18,7 @@ class PermInvariantNorm(nn.Module):
     def __init__(self,
                  batch_size=None,
                  n_sources=2,
-                 weighted=False):
+                 weighted_norm=0.0):
         """
         Initialization for the results and torch tensors that might
         be used afterwards
@@ -29,13 +29,14 @@ class PermInvariantNorm(nn.Module):
         """
         super().__init__()
         self.bs = batch_size
-        self.weighted = weighted
+        self.weighted_norm = weighted_norm
         self.permutations = list(itertools.permutations(
             torch.arange(n_sources)))
 
     def forward(self,
                 pr_batch,
                 t_batch,
+                weights=None,
                 eps=1e-7):
         """!
 
@@ -50,12 +51,12 @@ class PermInvariantNorm(nn.Module):
         mse_l = []
         for perm in self.permutations:
             permuted_pr_batch = (pr_batch[:, perm, :])
-            if self.weighted:
-                se = torch.abs(t_batch ** 2
+            if weights is None:
+                se = torch.abs((t_batch ** self.weighted_norm)
                                * (permuted_pr_batch - t_batch))
             else:
-                se = torch.abs(permuted_pr_batch - t_batch)
-
+                se = torch.abs((weights ** self.weighted_norm)
+                               * (permuted_pr_batch - t_batch))
             mse = torch.mean(se.view(se.shape[0], -1), dim=1)
             mse_l.append(mse)
 
