@@ -103,7 +103,9 @@ class End2EndMixtureDataset(Dataset):
             choices=['mixture_wav',
                      'clean_sources_wavs',
                      'mic1_wav_downsampled',
-                     'clean_sources_wavs_downsampled'])
+                     'clean_sources_wavs_downsampled',
+                     'mixture_wav_norm',
+                     'clean_sources_wavs_norm'])
 
         self.n_batches = int(self.n_items / self.batch_size)
 
@@ -245,7 +247,9 @@ def get_args():
                         choices=['mixture_wav',
                                  'clean_sources_wavs',
                                  'mic1_wav_downsampled',
-                                 'clean_sources_wavs_downsampled'])
+                                 'clean_sources_wavs_downsampled',
+                                 'mixture_wav_norm',
+                                 'clean_sources_wavs_norm'])
     return parser.parse_args()
 
 
