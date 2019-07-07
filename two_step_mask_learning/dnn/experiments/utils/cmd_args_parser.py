@@ -93,10 +93,10 @@ def get_args():
     parser.add_argument("-norm", "--norm_type", type=str,
                         help="""The type of the applied normalization layer.""",
                         default="gln", choices=['bn', 'gln'])
-    parser.add_argument("--weighted_norm", type=str,
-                        help="""The type of weighting L1 in mask regression.""",
-                        default=None,
-                        choices=['simple', 'squared'])
+    parser.add_argument("-wn", "--weighted_norm", type=float,
+                        help="""The exponent of weighting L1 in mask 
+                        regression.""",
+                        default=0.0)
     parser.add_argument("-version", "--tasnet_version", type=str,
                         help="""The type of Tasnet you want to run.""",
                         default="simplified", choices=['full', 'simplified'])
