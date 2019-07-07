@@ -61,10 +61,10 @@ class CTN( nn.Module):
         s = x.clone()
 
         # Separation module
-        x = self.ln( x)
-        x = self.l1( x)
+        x = self.ln(x)
+        x = self.l1(x)
         for l in self.sm:
-            x = l( x)
+            x = l(x)
 
         # Get masks and apply them
         x = self.m( x.unsqueeze( 1))
