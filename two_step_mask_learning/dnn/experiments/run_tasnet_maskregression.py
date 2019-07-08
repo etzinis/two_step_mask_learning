@@ -119,7 +119,8 @@ else:
     audio_logger = None
 
 experiment = Experiment(API_KEY,
-                        project_name='Actual_TN_Mask_Regression')
+                        # project_name='Actual_TN_Mask_Regression')
+                        project_name='Yolo')
 experiment.log_parameters(hparams)
 
 experiment_name = '_'.join(hparams['tags'])
@@ -132,11 +133,12 @@ else:
     experiment.set_name(experiment_name)
 
 # define data loaders
-train_gen, val_gen = dataloader.get_data_generators(
+train_gen, val_gen, tr_val_gen = dataloader.get_data_generators(
     [hparams['train_dataset_path'],
-     hparams['val_dataset_path']],
+     hparams['val_dataset_path'], hparams['train_dataset_path']],
     bs=hparams['bs'], n_jobs=hparams['n_jobs'],
     get_top=[hparams['tr_get_top'],
+             hparams['val_get_top'],
              hparams['val_get_top']],
     return_items=hparams['return_items']
 )
@@ -149,10 +151,6 @@ back_loss_tr_loss_name, back_loss_tr_loss = (
                                weighted_norm=hparams['weighted_norm']))
 
 val_losses = dict([
-    ('val_SISDR', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
-                                               n_sources=hparams['n_sources'],
-                                               zero_mean=True,
-                                               backward_loss=False)),
     ('val_SISDRi', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
                                                 n_sources=hparams['n_sources'],
                                                 zero_mean=True,
@@ -163,6 +161,13 @@ val_losses = dict([
                                           weighted_norm=hparams['weighted_norm']))
   ])
 val_loss_name = 'val_SISDRi'
+
+tr_val_losses = dict([
+    ('tr_SISDRi', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                               n_sources=hparams['n_sources'],
+                                               zero_mean=True,
+                                               backward_loss=False,
+                                               improvement=True))])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -182,7 +187,9 @@ model = tn_mask.CTN(
 
 model.cuda()
 opt = torch.optim.Adam(model.parameters(), lr=hparams['learning_rate'])
-all_losses = [back_loss_tr_loss_name] + [k for k in sorted(val_losses.keys())]
+all_losses = [back_loss_tr_loss_name] + \
+             [k for k in sorted(val_losses.keys())] + \
+             [k for k in sorted(tr_val_losses.keys())]
 
 tr_step = 0
 val_step = 0
@@ -237,6 +244,29 @@ for i in range(hparams['n_epochs']):
                                        m1wavs,
                                        mixture_rec=None)
         val_step += 1
+
+    if tr_val_gen is not None:
+        model.eval()
+        with torch.no_grad():
+            for data in tqdm(val_gen, desc='Train Validation'):
+                m1wavs = data[0].unsqueeze(1).cuda()
+                clean_wavs = data[-1].cuda()
+
+                _, target_masks = model.afe(m1wavs, clean_wavs)
+                enc_masks = model(m1wavs)
+
+                for loss_name, loss_func in tr_val_losses.items():
+                    if 'L1' in loss_name:
+                        l = loss_func(enc_masks,
+                                      target_masks,
+                                      weights=model.encoder(m1wavs).unsqueeze(1))
+                    else:
+                        recon_sources = model.infer_source_signals(
+                            m1wavs, sources_masks=enc_masks)
+                        l = loss_func(recon_sources,
+                                      clean_wavs,
+                                      initial_mixtures=m1wavs)
+                    res_dic[loss_name]['acc'].append(l.item())
 
     res_dic = cometml_report.report_losses_mean_and_std(res_dic,
                                                         experiment,
