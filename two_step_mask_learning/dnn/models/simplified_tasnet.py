@@ -360,7 +360,7 @@ class GLNFullThymiosCTN(nn.Module):
         super(GLNFullThymiosCTN, self).__init__()
 
         # Number of sources to produce
-        self.S = S
+        self.S, self.N, self.L, self.B, self.H = S, N, L, B, H
 
         # Front end
         self.fe = nn.ModuleList([
@@ -378,6 +378,13 @@ class GLNFullThymiosCTN(nn.Module):
             GLNFullThymiosCTN.TCN(B=B, H=H, P=P, D=2 ** d)
             for _ in range(R) for d in range(X)])
 
+        if B != N:
+            # self.ln_bef_out_reshape = GlobalLayerNorm(B)
+            self.reshape_before_masks = nn.Conv1d(in_channels=B,
+                                                  out_channels=N,
+                                                  kernel_size=1)
+            # self.ln_bef_masks = nn.GlobalLayerNorm(S * N)
+
         # Masks layer
         self.m = nn.Conv2d(in_channels=1,
                            out_channels=S,
@@ -386,7 +393,7 @@ class GLNFullThymiosCTN(nn.Module):
 
         # Back end
         self.be = nn.ConvTranspose1d(in_channels=N * S, out_channels=S,
-                                     output_padding=9, kernel_size=L,
+                                     output_padding=(L // 2) - 1, kernel_size=L,
                                      stride=L // 2, padding=L // 2,
                                      groups=S)
 
@@ -404,6 +411,10 @@ class GLNFullThymiosCTN(nn.Module):
         x = self.l1(x)
         for l in self.sm:
             x = l(x)
+
+        if self.B != self.N:
+            # x = self.ln_bef_out_reshape(x)
+            x = self.reshape_before_masks(x)
 
         # Get masks and apply them
         x = self.m(x.unsqueeze(1))
