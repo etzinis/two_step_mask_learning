@@ -17,12 +17,8 @@ import torch
 from tqdm import tqdm
 from pprint import pprint
 import two_step_mask_learning.dnn.dataset_loader.torch_dataloader as dataloader
-from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_P, \
-    WSJ_MIX_2_8K_PREPROCESSED_TEST_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
-from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P, \
-    WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-from __config__ import TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P, \
-    TIMIT_MIX_2_8K_PREPROCESSED_TEST_P, TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
+import two_step_mask_learning.dnn.experiments.utils.dataset_specific_params \
+    as dataset_specific_params
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
 import two_step_mask_learning.dnn.models.conv_tasnet_wrapper as tasnet_wrapper
@@ -34,7 +30,7 @@ import two_step_mask_learning.dnn.models.conv_tasnet as other_tasent
 
 
 args = parser.get_args()
-torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.enabled = False
 
 hparams = {
@@ -63,40 +59,13 @@ hparams = {
     "tasnet_version": args.tasnet_version
 }
 
-if (hparams['train_dataset'] == 'WSJ2MIX8K' and
-    hparams['val_dataset'] == 'WSJ2MIX8K'):
-    hparams['in_samples'] = 32000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
-    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
-elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
-    hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
-    hparams['in_samples'] = 32000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
-elif(hparams['train_dataset'] == 'TIMITMF8K' and
-     hparams['val_dataset'] == 'TIMITMF8K'):
-    hparams['in_samples'] = 16000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
-    hparams['val_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P
-    hparams['return_items'] = ['mic1_wav_downsampled',
-                               'clean_sources_wavs_downsampled']
-else:
-    raise NotImplementedError('Datasets: {}, {} are not available'
-                              ''.format(hparams['train_dataset'],
-                                        hparams['val_dataset']))
-
+dataset_specific_params.update_hparams(hparams)
 if hparams["log_path"] is not None:
     audio_logger = log_audio.AudioLogger(hparams["log_path"],
                                          hparams["fs"],
                                          hparams["bs"],
                                          hparams["n_sources"])
-#
+
 experiment = Experiment(API_KEY,
                         project_name='PAris o Trelos')
 experiment.log_parameters(hparams)
@@ -159,17 +128,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
 #     S=2)
 #
 
-# model = ptasent.GLNFullThymiosCTN(
-#     B=hparams['B'],
-#     H=hparams['H'],
-#     P=hparams['P'],
-#     R=hparams['R'],
-#     X=hparams['X'],
-#     L=hparams['n_kernel'],
-#     N=hparams['n_basis'],
-#     S=2)
-
-model = ptasent.GLNOneDecoderThymiosCTN(
+model = ptasent.GLNFullThymiosCTN(
     B=hparams['B'],
     H=hparams['H'],
     P=hparams['P'],
@@ -178,6 +137,16 @@ model = ptasent.GLNOneDecoderThymiosCTN(
     L=hparams['n_kernel'],
     N=hparams['n_basis'],
     S=2)
+
+# model = ptasent.GLNOneDecoderThymiosCTN(
+#     B=hparams['B'],
+#     H=hparams['H'],
+#     P=hparams['P'],
+#     R=hparams['R'],
+#     X=hparams['X'],
+#     L=hparams['n_kernel'],
+#     N=hparams['n_basis'],
+#     S=2)
 
 
 numparams = 0
