@@ -17,7 +17,7 @@ class TNEncoder(nn.Module):
         self.conv = nn.Conv1d(1, enc_channels, kernel_size,
                               stride=kernel_size // 2,
                               padding=(kernel_size-1)//2,
-                              bias=False)
+                              bias=True)
         self.out_activation = nn.ReLU()
 
     def forward(self, x):
@@ -43,9 +43,9 @@ class TNDConvLayer(nn.Module):
         super().__init__()
         self.conv = nn.Conv1d(out_channels, out_channels,
                               kernel_size,
-                              padding=dilation * (kernel_size - 1) // 2,
+                              padding=(dilation * (kernel_size - 1)) // 2,
                               dilation=dilation, groups=groups,
-                              bias=False)
+                              bias=True)
 
     def forward(self, x):
         out = self.conv(x)
@@ -167,10 +167,10 @@ class TNSeparationModule(nn.Module):
                  norm="gln", version='simplified'):
         super().__init__()
         self.C = C
-        # self.input_norm = get_norm_layer(norm_type=norm, num_parameters=N)
-        self.input_norm = nn.LayerNorm(N)
+        self.input_norm = get_norm_layer(norm_type=norm, num_parameters=N)
+        # self.input_norm = nn.LayerNorm(N)
         if version == 'simplified':
-            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=False)
+            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=True)
             self.blocks = nn.ModuleList()
             for r in range(R):
                 for x in range(X):
@@ -178,7 +178,7 @@ class TNSeparationModule(nn.Module):
                                                     norm=norm, version=version))
 
         elif version == 'full':
-            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=False)
+            self.bottleneck_conv = nn.Conv1d(N, B, 1, bias=True)
             self.blocks = nn.ModuleList()
             for r in range(R):
                 for x in range(X):
@@ -190,12 +190,12 @@ class TNSeparationModule(nn.Module):
         self.out_conv = nn.Conv2d(in_channels=1,
                                   out_channels=C,
                                   kernel_size=(N + 1, 1),
-                                  padding=(N - B // 2, 0))
+                                  padding=(N - N // 2, 0))
 
     def forward(self, x):
-        x = x.contiguous().transpose(1, 2)
+        # x = x.contiguous().transpose(1, 2)
         x = self.input_norm(x)
-        x = x.contiguous().transpose(1, 2)
+        # x = x.contiguous().transpose(1, 2)
         m = self.bottleneck_conv(x)
         for i in range(len(self.blocks)):
             m = self.blocks[i](m)
@@ -268,10 +268,13 @@ class TasNetFrontendsWrapper(nn.Module):
             self.k_size = L
             self.n_basis = N
             self.encoder = TNEncoder(self.n_basis, self.k_size)
-            self.decoder = nn.ConvTranspose1d(self.n_basis, 1, self.k_size,
+            self.decoder = nn.ConvTranspose1d(self.n_basis * n_sources,
+                                              n_sources,
+                                              self.k_size,
                                               stride=self.k_size // 2,
                                               padding=(self.k_size-1)//2,
-                                              bias=False)
+                                              groups=n_sources,
+                                              bias=True)
             self.n_time_frames = int(
                 (in_samples - (self.k_size - 1) - 1) / (self.k_size // 2) + 1)
 
@@ -303,9 +306,10 @@ class TasNetFrontendsWrapper(nn.Module):
         sources_masks = self.get_estimated_masks(enc_mixture)
 
         if return_wavs:
-            rec_wavs = torch.cat(
-                [self.decoder(enc_mixture * sources_masks[:, c, :, :])
-                 for c in range(self.n_sources)], dim=1)
+            adfe_sources = sources_masks * enc_mixture.unsqueeze(1)
+            rec_wavs = self.decoder(adfe_sources.view(adfe_sources.shape[0],
+                                                      -1,
+                                                      adfe_sources.shape[-1]))
             return sources_masks, rec_wavs
         else:
             return sources_masks
@@ -319,8 +323,11 @@ class TasNetFrontendsWrapper(nn.Module):
         else:
             m_out = sources_masks
 
-        return torch.cat([self.decoder(enc_mixture * m_out[:, c, :, :])
-                          for c in range(self.n_sources)], dim=1)
+        adfe_sources = m_out * enc_mixture.unsqueeze(1)
+        rec_wavs = self.decoder(adfe_sources.view(adfe_sources.shape[0],
+                                                  -1,
+                                                  adfe_sources.shape[-1]))
+        return rec_wavs
 
     def AE_recontruction(self, mixture_wav):
         enc_mixture = self.encoder(mixture_wav)
