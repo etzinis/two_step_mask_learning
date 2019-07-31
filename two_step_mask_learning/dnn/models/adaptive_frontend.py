@@ -182,6 +182,12 @@ class AdaptiveModulatorConvAE(nn.Module):
                                                       s_recon_enc.shape[-1]))
         return recon_sources, enc_masks
 
+    def get_encoded_sources(self, mixture, clean_sources):
+        enc_mixture = self.mix_encoder(mixture)
+        enc_masks = self.get_target_masks_tensor(clean_sources)
+        s_recon_enc = enc_masks * enc_mixture.unsqueeze(1)
+        return s_recon_enc
+
     @classmethod
     def save(cls, model, path, optimizer, epoch,
              tr_loss=None, cv_loss=None):

@@ -65,8 +65,8 @@ if (hparams['train_dataset'] == 'WSJ2MIX8K' and
     hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
     hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
     hparams['afe_dir'] = AFE_WSJ_MIX_2_8K
-    hparams['return_items'] = ['mixture_wav',
-                               'clean_sources_wavs']
+    hparams['return_items'] = ['mixture_wav_norm',
+                               'clean_sources_wavs_norm']
 elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
     hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
     hparams['in_samples'] = 32000
