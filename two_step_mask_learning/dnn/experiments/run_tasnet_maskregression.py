@@ -17,18 +17,11 @@ import torch
 from tqdm import tqdm
 from pprint import pprint
 import two_step_mask_learning.dnn.dataset_loader.torch_dataloader as dataloader
-from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_P, \
-    WSJ_MIX_2_8K_PREPROCESSED_TEST_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
-from __config__ import WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P, \
-    WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P, WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-from __config__ import TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P, \
-    TIMIT_MIX_2_8K_PREPROCESSED_TEST_P, TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
-from __config__ import AFE_WSJ_MIX_2_8K, AFE_WSJ_MIX_2_8K_PAD, \
-    AFE_WSJ_MIX_2_8K_NORMPAD
-from __config__ import TNMASK_WSJ_MIX_2_8K, TNMASK_WSJ_MIX_2_8K_PAD, \
-    TNMASK_WSJ_MIX_2_8K_NORMPAD
+import two_step_mask_learning.dnn.experiments.utils.dataset_specific_params \
+    as dataset_specific_params
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
+import two_step_mask_learning.dnn.losses.bce as bce_lib
 import two_step_mask_learning.dnn.models.conv_tasnet_maskregress as tn_mask
 import two_step_mask_learning.dnn.utils.cometml_learned_masks as masks_vis
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
@@ -64,52 +57,7 @@ hparams = {
     'weighted_norm': args.weighted_norm
 }
 
-if (hparams['train_dataset'] == 'WSJ2MIX8K' and
-    hparams['val_dataset'] == 'WSJ2MIX8K'):
-    hparams['in_samples'] = 32000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_P
-    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_P
-    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K
-    hparams['tn_mask_dir'] = TNMASK_WSJ_MIX_2_8K
-    hparams['return_items'] = ['mixture_wav',
-                               'clean_sources_wavs']
-elif (hparams['train_dataset'] == 'WSJ2MIX8KPAD' and
-    hparams['val_dataset'] == 'WSJ2MIX8KPAD'):
-    hparams['in_samples'] = 32000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
-    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_PAD
-    hparams['tn_mask_dir'] = TNMASK_WSJ_MIX_2_8K_PAD
-    hparams['return_items'] = ['mixture_wav',
-                               'clean_sources_wavs']
-elif (hparams['train_dataset'] == 'WSJ2MIX8KNORMPAD' and
-    hparams['val_dataset'] == 'WSJ2MIX8KNORMPAD'):
-    hparams['in_samples'] = 32000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-    hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
-    hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_NORMPAD
-    hparams['tn_mask_dir'] = TNMASK_WSJ_MIX_2_8K_NORMPAD
-    hparams['return_items'] = ['mixture_wav_norm',
-                               'clean_sources_wavs_norm']
-elif(hparams['train_dataset'] == 'TIMITMF8K' and
-     hparams['val_dataset'] == 'TIMITMF8K'):
-    hparams['in_samples'] = 16000
-    hparams['n_sources'] = 2
-    hparams['fs'] = 8000.
-    hparams['train_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_TRAIN_P
-    hparams['val_dataset_path'] = TIMIT_MIX_2_8K_PREPROCESSED_EVAL_P
-    hparams['return_items'] = ['mic1_wav_downsampled',
-                               'clean_sources_wavs_downsampled']
-else:
-    raise NotImplementedError('Datasets: {}, {} are not available'
-                              ''.format(hparams['train_dataset'],
-                                        hparams['val_dataset']))
+dataset_specific_params.update_hparams(hparams)
 if hparams["log_path"] is not None:
     audio_logger = log_audio.AudioLogger(hparams["log_path"],
                                          hparams["fs"],
@@ -144,11 +92,23 @@ train_gen, val_gen, tr_val_gen = dataloader.get_data_generators(
 )
 
 # define the losses that are going to be used
+# back_loss_tr_loss_name, back_loss_tr_loss = (
+#     'tr_back_loss_L1',
+#     norm_lib.PermInvariantNorm(batch_size=hparams['bs'],
+#                                n_sources=hparams['n_sources'],
+#                                weighted_norm=hparams['weighted_norm']))
+
 back_loss_tr_loss_name, back_loss_tr_loss = (
-    'tr_back_loss_L1',
-    norm_lib.PermInvariantNorm(batch_size=hparams['bs'],
-                               n_sources=hparams['n_sources'],
-                               weighted_norm=hparams['weighted_norm']))
+    'tr_back_loss_mask_SISDR',
+    sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
+                                 n_sources=hparams['n_sources'],
+                                 zero_mean=False,
+                                 backward_loss=True))
+
+# back_loss_tr_loss_name, back_loss_tr_loss = (
+#     'tr_back_loss_mask_BCE',
+#     bce_lib.PermInvariantBCE(batch_size=hparams['bs'],
+#                              n_sources=hparams['n_sources']))
 
 val_losses = dict([
     ('val_SISDRi', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
@@ -156,9 +116,6 @@ val_losses = dict([
                                                 zero_mean=True,
                                                 backward_loss=False,
                                                 improvement=True)),
-    ('val_L1', norm_lib.PermInvariantNorm(batch_size=hparams['bs'],
-                                          n_sources=hparams['n_sources'],
-                                          weighted_norm=hparams['weighted_norm']))
   ])
 val_loss_name = 'val_SISDRi'
 
@@ -185,6 +142,13 @@ model = tn_mask.CTN(
     afe_reg=hparams['afe_reg'],
     weighted_norm=hparams['weighted_norm'])
 
+numparams = 0
+for f in model.parameters():
+    if f.requires_grad:
+        numparams += f.numel()
+experiment.log_parameter('Parameters', numparams)
+print(numparams)
+
 model.cuda()
 opt = torch.optim.Adam(model.parameters(), lr=hparams['learning_rate'])
 all_losses = [back_loss_tr_loss_name] + \
@@ -206,11 +170,12 @@ for i in range(hparams['n_epochs']):
         m1wavs = data[0].unsqueeze(1).cuda()
         clean_wavs = data[-1].cuda()
 
-        _, target_masks = model.afe(m1wavs, clean_wavs)
+        target_masks = model.afe.get_target_masks_tensor(clean_wavs)
         enc_masks = model(m1wavs)
-        l = back_loss_tr_loss(enc_masks,
-                              target_masks,
-                              weights=model.encoder(m1wavs).unsqueeze(1))
+        l = back_loss_tr_loss(enc_masks.view(enc_masks.shape[0],
+                                             enc_masks.shape[1], -1),
+                              target_masks.view(enc_masks.shape[0],
+                                                enc_masks.shape[1], -1))
         l.backward()
         opt.step()
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
@@ -223,7 +188,7 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                _, target_masks = model.afe(m1wavs, clean_wavs)
+                target_masks = model.afe.get_target_masks_tensor(clean_wavs)
                 enc_masks = model(m1wavs)
 
                 for loss_name, loss_func in val_losses.items():
@@ -248,11 +213,11 @@ for i in range(hparams['n_epochs']):
     if tr_val_gen is not None:
         model.eval()
         with torch.no_grad():
-            for data in tqdm(val_gen, desc='Train Validation'):
+            for data in tqdm(tr_val_gen, desc='Train Validation'):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                _, target_masks = model.afe(m1wavs, clean_wavs)
+                target_masks = model.afe.get_target_masks_tensor(clean_wavs)
                 enc_masks = model(m1wavs)
 
                 for loss_name, loss_func in tr_val_losses.items():

@@ -26,10 +26,12 @@ class CTN(nn.Module):
                 nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
                 nn.PReLU(),
                 nn.BatchNorm1d(H),
+                # GlobalLayerNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
                           padding=(D * (P - 1)) // 2, dilation=D, groups=H),
                 nn.PReLU(),
                 nn.BatchNorm1d(H),
+                # GlobalLayerNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
             ])
 
@@ -90,7 +92,7 @@ class CTN(nn.Module):
 
         # Norm before the rest, and apply one more dense layer
         self.ln_in = nn.BatchNorm1d(N)
-        # self.gln_in = GlobalLayerNorm(N)
+        # self.ln_in = GlobalLayerNorm(N)
         self.l1 = nn.Conv1d(in_channels=self.N,
                             out_channels=self.B,
                             kernel_size=1)
@@ -101,11 +103,22 @@ class CTN(nn.Module):
             for _ in range(R) for d in range(X)])
 
         # Masks layer
-        self.m = nn.Conv1d(in_channels=self.B,
-                           out_channels=self.n_sources * self.N,
-                           kernel_size=1)
-        self.ln_mask_in = nn.BatchNorm1d(self.B)
-        self.ln_out = nn.BatchNorm1d(self.n_sources * self.N)
+        self.m = nn.Conv2d(in_channels=1,
+                           out_channels=self.n_sources,
+                           kernel_size=(N + 1, 1),
+                           padding=(N - N // 2, 0))
+        # self.m = nn.Conv1d(in_channels=self.B,
+        #                    out_channels=self.n_sources * self.N,
+        #                    kernel_size=1)
+        # self.ln_out = nn.BatchNorm1d(self.n_sources * self.N)
+        # self.ln_out = GlobalLayerNorm(self.n_sources * self.N)
+
+        if self.B != self.N or self.B == self.N:
+            self.out_reshape = nn.Conv1d(in_channels=B,
+                                         out_channels=N,
+                                         kernel_size=1)
+        # self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
     # Forward pass
@@ -118,13 +131,19 @@ class CTN(nn.Module):
         x = self.l1(x)
         for l in self.sm:
             x = l(x)
-        x = self.ln_mask_in(x)
+        if self.B != self.N or self.B == self.N:
+            x = self.out_reshape(x)
+        # x = self.ln_mask_in(x)
         # Get masks and return them
-        x = self.m(x)
-        x = self.ln_out(x)
-        x = x.view(x.shape[0], self.n_sources, self.N, -1)
+        # print("PAW NA KANW MALAKIA")
+        # print(x.shape)
+        x = self.m(x.unsqueeze(1))
+        # print(x.shape)
+        # x = x.view(x.shape[0], self.n_sources, self.N, -1)
         x = nn.functional.relu(x)
+        # masks = x / (torch.sum(x, dim=1, keepdim=True) + 10e-8)
         masks = nn.functional.softmax(x, dim=1)
+        # print(masks.shape)
         return masks
 
     def infer_source_signals(self, mixture_wav, sources_masks=None):
