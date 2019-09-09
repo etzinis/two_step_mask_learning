@@ -37,7 +37,7 @@ def update_hparams(hparams):
         hparams['n_sources'] = 2
         hparams['fs'] = 8000.
         hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-        hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
+        hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P
         hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_PAD
         hparams['tn_mask_dir'] = TNMASK_WSJ_MIX_2_8K_PAD
         hparams['return_items'] = ['mixture_wav',
@@ -48,7 +48,7 @@ def update_hparams(hparams):
         hparams['n_sources'] = 2
         hparams['fs'] = 8000.
         hparams['train_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TRAIN_PAD_P
-        hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_EVAL_PAD_P
+        hparams['val_dataset_path'] = WSJ_MIX_2_8K_PREPROCESSED_TEST_PAD_P
         hparams['afe_dir'] = AFE_WSJ_MIX_2_8K_NORMPAD
         hparams['tn_mask_dir'] = TNMASK_WSJ_MIX_2_8K_NORMPAD
         hparams['return_items'] = ['mixture_wav_norm',
