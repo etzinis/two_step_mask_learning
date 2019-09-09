@@ -117,7 +117,7 @@ class CTN(nn.Module):
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
-        # self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
         # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
@@ -134,7 +134,7 @@ class CTN(nn.Module):
             x = l(x)
         if self.B != self.N or self.B == self.N:
             x = self.out_reshape(x)
-        # x = self.ln_mask_in(x)
+        x = self.ln_mask_in(x)
         # Get masks and return them
         # print("PAW NA KANW MALAKIA")
         # print(x.shape)
