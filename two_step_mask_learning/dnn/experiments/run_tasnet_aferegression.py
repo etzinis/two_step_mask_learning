@@ -68,7 +68,7 @@ else:
 
 experiment = Experiment(API_KEY,
                         # project_name='Actual_TN_Mask_Regression')
-                        project_name='Yolo')
+                        project_name='SpetraEstimation')
 experiment.log_parameters(hparams)
 
 experiment_name = '_'.join(hparams['tags'])
@@ -210,7 +210,7 @@ for i in range(hparams['n_epochs']):
                                                                clean_wavs)
                 estimated_spectra = model(m1wavs)
 
-                for loss_name, loss_func in val_losses.items():
+                for loss_name, loss_func in tr_val_losses.items():
                     if 'L1' in loss_name:
                         l = loss_func(estimated_spectra,
                                       target_spectra,
