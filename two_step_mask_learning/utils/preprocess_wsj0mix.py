@@ -146,7 +146,7 @@ def write_data_wrapper_func(input_dirpath,
 
         sources_w_list = [wavfile.read(p)[1] / 29491.
                           for p in sources_paths]
-        sources_w_list_norm = [torch.tensor(normalize_wav(np_vec, std=mix_std),
+        sources_w_list_norm = [torch.tensor(normalize_wav(np_vec, std=None),
                                             dtype=torch.float32).unsqueeze(0)
                                for np_vec in sources_w_list]
         sources_wavs_norm = torch.cat(sources_w_list_norm, dim=0)
@@ -264,7 +264,7 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
 
 
 def example_of_usage():
-    input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/max'
+    input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/min'
     output_dirpath = '/mnt/nvme/wsj0_mix_preprocessed'
     wav_timelength = 4
     convert_wsj0mix_to_universal_dataset(input_dirpath,
