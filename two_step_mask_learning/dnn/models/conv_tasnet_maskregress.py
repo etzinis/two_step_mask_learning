@@ -25,13 +25,13 @@ class CTN(nn.Module):
             self.m = nn.ModuleList([
                 nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
                 nn.PReLU(),
-                nn.BatchNorm1d(H),
-                # GlobalLayerNorm(H),
+                # nn.BatchNorm1d(H),
+                GlobalLayerNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
                           padding=(D * (P - 1)) // 2, dilation=D, groups=H),
                 nn.PReLU(),
-                nn.BatchNorm1d(H),
-                # GlobalLayerNorm(H),
+                # nn.BatchNorm1d(H),
+                GlobalLayerNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
             ])
 
@@ -117,7 +117,7 @@ class CTN(nn.Module):
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
-        # self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        self.ln_mask_in = nn.BatchNorm1d(self.N)
         # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
@@ -133,17 +133,12 @@ class CTN(nn.Module):
             x = l(x)
         if self.B != self.N or self.B == self.N:
             x = self.out_reshape(x)
-        # x = self.ln_mask_in(x)
-        # Get masks and return them
-        # print("PAW NA KANW MALAKIA")
-        # print(x.shape)
+
+        x = self.ln_mask_in(x)
+
         x = self.m(x.unsqueeze(1))
-        # print(x.shape)
-        # x = x.view(x.shape[0], self.n_sources, self.N, -1)
         x = nn.functional.relu(x)
-        # masks = x / (torch.sum(x, dim=1, keepdim=True) + 10e-8)
         masks = nn.functional.softmax(x, dim=1)
-        # print(masks.shape)
         return masks
 
     def infer_source_signals(self, mixture_wav, sources_masks=None):

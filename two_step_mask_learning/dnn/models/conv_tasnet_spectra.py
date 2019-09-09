@@ -91,8 +91,8 @@ class CTN(nn.Module):
         self.weighted_norm = weighted_norm
 
         # Norm before the rest, and apply one more dense layer
-        # self.ln_in = nn.BatchNorm1d(N)
-        self.ln_in = GlobalLayerNorm(N)
+        self.ln_in = nn.BatchNorm1d(N)
+        # self.ln_in = GlobalLayerNorm(N)
         self.l1 = nn.Conv1d(in_channels=self.N,
                             out_channels=self.B,
                             kernel_size=1)
@@ -117,7 +117,7 @@ class CTN(nn.Module):
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
-        # self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
         # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
@@ -134,17 +134,10 @@ class CTN(nn.Module):
             x = l(x)
         if self.B != self.N or self.B == self.N:
             x = self.out_reshape(x)
-        # x = self.ln_mask_in(x)
-        # Get masks and return them
-        # print("PAW NA KANW MALAKIA")
-        # print(x.shape)
-        x = self.m(x.unsqueeze(1))
-        # print(x.shape)
-        # x = x.view(x.shape[0], self.n_sources, self.N, -1)
+        x = self.ln_mask_in(x)
         x = nn.functional.relu(x)
-        # masks = x / (torch.sum(x, dim=1, keepdim=True) + 10e-8)
+        x = self.m(x.unsqueeze(1))
         masks = nn.functional.softmax(x, dim=1)
-        # print(masks.shape)
         return masks * encoded_mixture.unsqueeze(1)
 
     def infer_source_signals(self, mixture_wav):
