@@ -71,7 +71,8 @@ class PermInvariantSISDR(nn.Module):
                  zero_mean=False,
                  n_sources=None,
                  backward_loss=True,
-                 improvement=False):
+                 improvement=False,
+                 return_individual_results=False):
         """
         Initialization for the results and torch tensors that might
         be used afterwards
@@ -88,6 +89,7 @@ class PermInvariantSISDR(nn.Module):
             torch.arange(n_sources)))
         self.improvement = improvement
         self.n_sources = n_sources
+        self.return_individual_results = return_individual_results
 
     def normalize_input(self, pr_batch, t_batch, initial_mixtures=None):
         min_len = min(pr_batch.shape[-1],
@@ -139,7 +141,7 @@ class PermInvariantSISDR(nn.Module):
                                                  t_t_diag, eps=eps)
             sisnr_l.append(sisnr)
         all_sisnrs = torch.cat(sisnr_l, -1)
-        best_sisdr = torch.max(all_sisnrs.mean(-2), -1)[0].mean()
+        best_sisdr = torch.max(all_sisnrs.mean(-2), -1)[0]
 
         if self.improvement:
             initial_mix = initial_mixtures.repeat(1, self.n_sources, 1)
@@ -147,6 +149,9 @@ class PermInvariantSISDR(nn.Module):
                                                       t_batch,
                                                       t_t_diag, eps=eps)
             best_sisdr -= base_sisdr.mean()
+
+        if not self.return_individual_results:
+            best_sisdr = best_sisdr.mean()
 
         if self.backward_loss:
             return - best_sisdr
