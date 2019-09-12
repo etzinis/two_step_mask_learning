@@ -341,13 +341,13 @@ class GLNFullThymiosCTN(nn.Module):
             self.m = nn.ModuleList([
                 nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
                 nn.PReLU(),
-                # GlobalLayerNorm(H),
-                nn.BatchNorm1d(H),
+                GlobalLayerNorm(H),
+                # nn.BatchNorm1d(H),
                 nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
                           padding=(D * (P - 1)) // 2, dilation=D, groups=H),
                 nn.PReLU(),
-                # GlobalLayerNorm(H),
-                nn.BatchNorm1d(H),
+                GlobalLayerNorm(H),
+                # nn.BatchNorm1d(H),
                 nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
             ])
 
