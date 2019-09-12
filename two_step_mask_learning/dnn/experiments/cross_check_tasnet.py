@@ -93,7 +93,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
 
 back_loss_tr_loss_name, back_loss_tr_loss = (
-    'tr_SISDRi',
+    'tr_back_loss_SISDRi',
     sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
                                  n_sources=hparams['n_sources'],
                                  zero_mean=False,
