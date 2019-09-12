@@ -20,10 +20,8 @@ import two_step_mask_learning.dnn.dataset_loader.torch_dataloader as dataloader
 import two_step_mask_learning.dnn.experiments.utils.dataset_specific_params \
     as dataset_specific_params
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
-import two_step_mask_learning.dnn.losses.norm as norm_lib
-import two_step_mask_learning.dnn.losses.bce as bce_lib
 import two_step_mask_learning.dnn.models.conv_tasnet_spectra as tn_spectra
-import two_step_mask_learning.dnn.utils.cometml_learned_masks as masks_vis
+import two_step_mask_learning.dnn.utils.metrics_logger as metrics_logger
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
@@ -54,6 +52,7 @@ hparams = {
     "learning_rate": args.learning_rate,
     "tags": args.cometml_tags,
     "log_path": args.experiment_logs_path,
+    "metrics_log_path": args.metrics_logs_path,
     'weighted_norm': args.weighted_norm
 }
 
@@ -66,9 +65,7 @@ if hparams["log_path"] is not None:
 else:
     audio_logger = None
 
-experiment = Experiment(API_KEY,
-                        # project_name='Actual_TN_Mask_Regression')
-                        project_name='SpetraEstimation')
+experiment = Experiment(API_KEY, project_name=hparams["project_name"])
 experiment.log_parameters(hparams)
 
 experiment_name = '_'.join(hparams['tags'])
@@ -103,7 +100,8 @@ val_losses = dict([
                                                 n_sources=hparams['n_sources'],
                                                 zero_mean=True,
                                                 backward_loss=False,
-                                                improvement=True)),
+                                                improvement=True,
+                                                return_individual_results=True)),
   ])
 val_loss_name = 'val_SISDRi'
 
@@ -112,7 +110,8 @@ tr_val_losses = dict([
                                                n_sources=hparams['n_sources'],
                                                zero_mean=True,
                                                backward_loss=False,
-                                               improvement=True))])
+                                               improvement=True,
+                                               return_individual_results=True))])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -223,17 +222,21 @@ for i in range(hparams['n_epochs']):
                                       initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'].append(l.item())
 
+    if hparams["metrics_log_path"] is not None:
+        metrics_logger.log_metrics(res_dic, hparams["metrics_log_path"],
+                                   tr_step, val_step)
+
     res_dic = cometml_report.report_losses_mean_and_std(res_dic,
                                                         experiment,
                                                         tr_step,
                                                         val_step)
-    masks_vis.create_and_log_tasnet_masks(
-        experiment,
-        estimated_spectra[0].detach().cpu().numpy(),
-        target_spectra[0].detach().cpu().numpy(),
-        model.encoder(m1wavs)[0].detach().cpu().numpy(),
-        model.encoder.conv.weight.squeeze().detach().cpu().numpy(),
-        model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
+    # masks_vis.create_and_log_tasnet_masks(
+    #     experiment,
+    #     estimated_spectra[0].detach().cpu().numpy(),
+    #     target_spectra[0].detach().cpu().numpy(),
+    #     model.encoder(m1wavs)[0].detach().cpu().numpy(),
+    #     model.encoder.conv.weight.squeeze().detach().cpu().numpy(),
+    #     model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 
     tn_spectra.CTN.save_if_best(
         hparams['tn_mask_dir'], model, opt, tr_step,

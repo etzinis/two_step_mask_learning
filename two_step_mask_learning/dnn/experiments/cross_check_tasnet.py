@@ -65,7 +65,7 @@ if hparams["log_path"] is not None:
                                          hparams["bs"],
                                          hparams["n_sources"])
 
-experiment = Experiment(API_KEY, project_name='peiramatiko')
+experiment = Experiment(API_KEY, project_name=hparams["project_name"])
 experiment.log_parameters(hparams)
 
 experiment_name = '_'.join(hparams['tags'])
