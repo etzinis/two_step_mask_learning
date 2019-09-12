@@ -29,7 +29,6 @@ import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 
 args = parser.get_args()
 
-
 hparams = {
     "train_dataset": args.train,
     "val_dataset": args.val,
@@ -157,8 +156,8 @@ for i in range(hparams['n_epochs']):
         m1wavs = data[0].unsqueeze(1).cuda()
         clean_wavs = data[-1].cuda()
 
-        target_spectra = model.afe.get_encoded_sources(m1wavs,
-                                                       clean_wavs)
+        target_spectra = model.module.afe.get_encoded_sources(
+            m1wavs, clean_wavs)
         estimated_spectra = model(m1wavs)
         l = back_loss_tr_loss(estimated_spectra.view(target_spectra.shape[0],
                                                      target_spectra.shape[1], -1),
@@ -176,21 +175,22 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                target_spectra = model.afe.get_encoded_sources(m1wavs,
-                                                               clean_wavs)
+                target_spectra = model.module.afe.get_encoded_sources(
+                    m1wavs, clean_wavs)
                 estimated_spectra = model(m1wavs)
 
                 for loss_name, loss_func in val_losses.items():
                     if 'L1' in loss_name:
                         l = loss_func(estimated_spectra,
                                       target_spectra,
-                                      weights=model.encoder(m1wavs).unsqueeze(1))
+                                      weights=model.module.encoder(
+                                          m1wavs).unsqueeze(1))
                     else:
-                        recon_sources = model.infer_source_signals(m1wavs)
+                        recon_sources = model.module.infer_source_signals(m1wavs)
                         l = loss_func(recon_sources,
                                       clean_wavs,
                                       initial_mixtures=m1wavs)
-                    res_dic[loss_name]['acc'].append(l.item())
+                    res_dic[loss_name]['acc'] += l.tolist()
             if audio_logger is not None:
                 audio_logger.log_batch(recon_sources,
                                        clean_wavs,
@@ -205,22 +205,22 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                target_spectra = model.afe.get_encoded_sources(m1wavs,
-                                                               clean_wavs)
+                target_spectra = model.module.afe.get_encoded_sources(
+                    m1wavs, clean_wavs)
                 estimated_spectra = model(m1wavs)
 
                 for loss_name, loss_func in tr_val_losses.items():
                     if 'L1' in loss_name:
                         l = loss_func(estimated_spectra,
                                       target_spectra,
-                                      weights=model.encoder(m1wavs).unsqueeze(
-                                          1))
+                                      weights=model.module.encoder(
+                                          m1wavs).unsqueeze(1))
                     else:
-                        recon_sources = model.infer_source_signals(m1wavs)
+                        recon_sources = model.module.infer_source_signals(m1wavs)
                         l = loss_func(recon_sources,
                                       clean_wavs,
                                       initial_mixtures=m1wavs)
-                    res_dic[loss_name]['acc'].append(l.item())
+                    res_dic[loss_name]['acc'] += l.tolist()
 
     if hparams["metrics_log_path"] is not None:
         metrics_logger.log_metrics(res_dic, hparams["metrics_log_path"],
@@ -239,7 +239,7 @@ for i in range(hparams['n_epochs']):
     #     model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 
     tn_spectra.CTN.save_if_best(
-        hparams['tn_mask_dir'], model, opt, tr_step,
+        hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
     for loss_name in res_dic:

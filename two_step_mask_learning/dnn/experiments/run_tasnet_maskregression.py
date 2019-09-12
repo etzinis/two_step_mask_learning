@@ -160,7 +160,7 @@ for i in range(hparams['n_epochs']):
         m1wavs = data[0].unsqueeze(1).cuda()
         clean_wavs = data[-1].cuda()
 
-        target_masks = model.afe.get_target_masks_tensor(clean_wavs)
+        target_masks = model.module.afe.get_target_masks_tensor(clean_wavs)
         enc_masks = model(m1wavs)
         l = back_loss_tr_loss(enc_masks.view(enc_masks.shape[0],
                                              enc_masks.shape[1], -1),
@@ -178,7 +178,7 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                target_masks = model.afe.get_target_masks_tensor(clean_wavs)
+                target_masks = model.module.afe.get_target_masks_tensor(clean_wavs)
                 enc_masks = model(m1wavs)
 
                 for loss_name, loss_func in val_losses.items():
@@ -187,12 +187,12 @@ for i in range(hparams['n_epochs']):
                                       target_masks,
                                       weights=model.encoder(m1wavs).unsqueeze(1))
                     else:
-                        recon_sources = model.infer_source_signals(
+                        recon_sources = model.module.infer_source_signals(
                             m1wavs, sources_masks=enc_masks)
                         l = loss_func(recon_sources,
                                       clean_wavs,
                                       initial_mixtures=m1wavs)
-                    res_dic[loss_name]['acc'].append(l.item())
+                    res_dic[loss_name]['acc'] += l.tolist()
             if audio_logger is not None:
                 audio_logger.log_batch(recon_sources,
                                        clean_wavs,
@@ -207,21 +207,21 @@ for i in range(hparams['n_epochs']):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
-                target_masks = model.afe.get_target_masks_tensor(clean_wavs)
+                target_masks = model.module.afe.get_target_masks_tensor(clean_wavs)
                 enc_masks = model(m1wavs)
 
                 for loss_name, loss_func in tr_val_losses.items():
                     if 'L1' in loss_name:
                         l = loss_func(enc_masks,
                                       target_masks,
-                                      weights=model.encoder(m1wavs).unsqueeze(1))
+                                      weights=model.module.encoder(m1wavs).unsqueeze(1))
                     else:
-                        recon_sources = model.infer_source_signals(
+                        recon_sources = model.module.infer_source_signals(
                             m1wavs, sources_masks=enc_masks)
                         l = loss_func(recon_sources,
                                       clean_wavs,
                                       initial_mixtures=m1wavs)
-                    res_dic[loss_name]['acc'].append(l.item())
+                    res_dic[loss_name]['acc'] += l.tolist()
 
     if hparams["metrics_log_path"] is not None:
         metrics_logger.log_metrics(res_dic, hparams["metrics_log_path"],
@@ -239,7 +239,7 @@ for i in range(hparams['n_epochs']):
     #     model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 
     tn_mask.CTN.save_if_best(
-        hparams['tn_mask_dir'], model, opt, tr_step,
+        hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
     for loss_name in res_dic:

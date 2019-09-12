@@ -164,7 +164,6 @@ for i in range(hparams['n_epochs']):
         l.backward()
         opt.step()
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
-        break
     tr_step += 1
 
     if val_gen is not None:
@@ -180,7 +179,6 @@ for i in range(hparams['n_epochs']):
                                   clean_wavs,
                                   initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'] += l.tolist()
-                break
             if hparams["log_path"] is not None:
                 audio_logger.log_batch(rec_sources_wavs,
                                        clean_wavs,
@@ -200,7 +198,6 @@ for i in range(hparams['n_epochs']):
                                   clean_wavs,
                                   initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'] += l.tolist()
-                break
     if hparams["metrics_log_path"] is not None:
         metrics_logger.log_metrics(res_dic, hparams["metrics_log_path"],
                                    tr_step, val_step)
