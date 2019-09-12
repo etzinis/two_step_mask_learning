@@ -139,7 +139,7 @@ for f in model.parameters():
 experiment.log_parameter('Parameters', numparams)
 print(numparams)
 
-model.cuda()
+model = torch.nn.DataParallel(model).cuda()
 opt = torch.optim.Adam(model.parameters(), lr=hparams['learning_rate'])
 all_losses = [back_loss_tr_loss_name] + \
              [k for k in sorted(val_losses.keys())] + \
