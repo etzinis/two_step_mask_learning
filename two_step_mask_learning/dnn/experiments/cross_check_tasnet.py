@@ -21,6 +21,7 @@ import two_step_mask_learning.dnn.experiments.utils.dataset_specific_params \
     as dataset_specific_params
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
+import two_step_mask_learning.dnn.utils.metrics_logger as metrics_logger
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 import two_step_mask_learning.dnn.models.simplified_tasnet as ptasent
@@ -53,6 +54,7 @@ hparams = {
     "return_items": args.return_items,
     "tags": args.cometml_tags,
     "log_path": args.experiment_logs_path,
+    "metrics_log_path": args.metrics_logs_path,
     "tasnet_version": args.tasnet_version
 }
 
@@ -162,6 +164,7 @@ for i in range(hparams['n_epochs']):
         l.backward()
         opt.step()
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
+        break
     tr_step += 1
 
     if val_gen is not None:
@@ -177,12 +180,11 @@ for i in range(hparams['n_epochs']):
                                   clean_wavs,
                                   initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'] += l.tolist()
-
+                break
             if hparams["log_path"] is not None:
                 audio_logger.log_batch(rec_sources_wavs,
                                        clean_wavs,
                                        m1wavs)
-
         val_step += 1
 
     if tr_val_losses.values():
@@ -198,6 +200,10 @@ for i in range(hparams['n_epochs']):
                                   clean_wavs,
                                   initial_mixtures=m1wavs)
                     res_dic[loss_name]['acc'] += l.tolist()
+                break
+    if hparams["metrics_log_path"] is not None:
+        metrics_logger.log_metrics(res_dic, hparams["metrics_log_path"],
+                                   tr_step, val_step)
 
     res_dic = cometml_report.report_losses_mean_and_std(res_dic,
                                                         experiment,

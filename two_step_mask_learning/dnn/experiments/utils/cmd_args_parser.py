@@ -25,6 +25,9 @@ def get_args():
     parser.add_argument("-elp", "--experiment_logs_path", type=str,
                         help="""Path for logging experiment's audio.""",
                         default=None)
+    parser.add_argument("-mlp", "--metrics_logs_path", type=str,
+                        help="""Path for logging metrics.""",
+                        default=None)
     parser.add_argument("--n_train", type=int,
                         help="""Reduce the number of training 
                             samples to this number.""", default=None)
@@ -90,6 +93,10 @@ def get_args():
     parser.add_argument("-R", "--tasnet_R", type=int,
                         help="Number of repeats of TN Blocks",
                         default=4)
+    parser.add_argument("-Sc", "--tasnet_Sc", type=int,
+                        help="Number of dimensions of Skip Connection Dense "
+                             "Layer",
+                        default=128)
     parser.add_argument("-norm", "--norm_type", type=str,
                         help="""The type of the applied normalization layer.""",
                         default="gln", choices=['bn', 'gln'])
