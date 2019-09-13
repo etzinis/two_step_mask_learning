@@ -144,17 +144,14 @@ def write_data_wrapper_func(input_dirpath,
                 'wav_norm': norm_wav,
             }
 
-            if these_speakers[0] == these_speakers[1]:
-                print("PORNO")
+            if not os.path.exists(output_uid_folder):
+                os.makedirs(output_uid_folder)
+            else:
+                continue
 
-            # if not os.path.exists(output_uid_folder):
-            #     os.makedirs(output_uid_folder)
-            # else:
-            #     continue
-            #
-            # for k, v in data.items():
-            #     file_path = os.path.join(output_uid_folder, k)
-            #     joblib.dump(v, file_path, compress=0)
+            for k, v in data.items():
+                file_path = os.path.join(output_uid_folder, k)
+                joblib.dump(v, file_path, compress=0)
 
     return lambda uid: process_uid(uid)
 
