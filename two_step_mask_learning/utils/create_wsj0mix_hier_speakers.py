@@ -237,7 +237,7 @@ def convert_wsj0mix_to_hierarchical_dataset(input_dirpath,
 
     root_out_dir = os.path.join(output_dirpath, output_name)
 
-    subset_input_dirpath = os.path.join(input_dirpath, 'tr')
+    subset_input_dirpath = os.path.join(input_dirpath, 'cv')
     convert_subset(subset_input_dirpath,
                    root_out_dir,
                    fs,
@@ -250,7 +250,7 @@ def convert_wsj0mix_to_hierarchical_dataset(input_dirpath,
 
 def example_of_usage():
     input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/min'
-    output_dirpath = '/mnt/data/wsj0_mix_speakers_hierarchy'
+    output_dirpath = '/mnt/data/hierarchical_sound_datasets/wsj0_mix_val'
     wav_timelength = 4
     convert_wsj0mix_to_hierarchical_dataset(input_dirpath,
                                             output_dirpath,

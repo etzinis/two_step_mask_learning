@@ -18,6 +18,8 @@ import joblib
 import librosa
 from scipy.io import wavfile
 import torch
+from tqdm import tqdm
+import shutil
 
 import two_step_mask_learning.utils.progress_display as progress_display
 
@@ -192,14 +194,64 @@ def convert_ESC50_to_hierarchical_dataset(input_dirpath,
     print("Dataset ready at: {}".format(output_dirpath))
 
 
+def copyDirectory(src, dest):
+    try:
+        shutil.copytree(src, dest)
+    # Directories are the same
+    except shutil.Error as e:
+        print('Directory not copied. Error: %s' % e)
+    # Any error saying that the directory doesn't exist
+    except OSError as e:
+        print('Directory not copied. Error: %s' % e)
+
+
+def partition_dataset(hier_dataset_dirpath,
+                      partitions_dirpath):
+    # After converting the dataset to an hierarchical one then partition it
+    # to train val and test. The folds are going to be used as train
+    # partition is going to get folds 1-4 for all sound classes while test
+    # and val are going to share the remaining 5th fold
+    sound_classes_dirs = glob(hier_dataset_dirpath + '/*')
+    for class_path in tqdm(sound_classes_dirs):
+        class_name = os.path.basename(class_path)
+        audio_files_dirs = glob(class_path + '/*')
+
+        samples_dict = dict([(x, []) for x in range(1, 6)])
+        data_sample_names = [os.path.basename(file_dir)
+                             for file_dir in audio_files_dirs]
+        for data_sample_name in data_sample_names:
+            fold = int(data_sample_name.split('-')[0])
+            samples_dict[fold].append(data_sample_name)
+
+        folds_numbers = sorted(samples_dict.keys())
+        for k in folds_numbers[:-1]:
+            for sample in samples_dict[k]:
+                out_dir = os.path.join(partitions_dirpath, 'train', class_name,
+                                       sample)
+                copyDirectory(os.path.join(class_path, sample), out_dir)
+
+        n_val_test_samples = len(samples_dict[folds_numbers[-1]])
+        n_test_samples = int(n_val_test_samples / 2.)
+        for sample in samples_dict[folds_numbers[-1]][:n_test_samples]:
+            out_dir = os.path.join(partitions_dirpath, 'test', class_name, sample)
+            copyDirectory(os.path.join(class_path, sample), out_dir)
+
+        for sample in samples_dict[folds_numbers[-1]][n_test_samples:]:
+            out_dir = os.path.join(partitions_dirpath, 'val', class_name, sample)
+            copyDirectory(os.path.join(class_path, sample), out_dir)
+
+
 def example_of_usage():
     input_dirpath = '/mnt/data/hierarchical_sound_datasets/ESC-50-master'
     output_dirpath = '/mnt/data/hierarchical_sound_datasets/ESC-50'
+    partioned_dataset_dirpath = \
+        '/mnt/data/hierarchical_sound_datasets/ESC50_partitioned'
     wav_timelength = 4
-    convert_ESC50_to_hierarchical_dataset(input_dirpath,
-                                          output_dirpath,
-                                          wav_timelength)
-
+    # convert_ESC50_to_hierarchical_dataset(input_dirpath,
+    #                                       output_dirpath,
+    #                                       wav_timelength)
+    partition_dataset(output_dirpath,
+                      partioned_dataset_dirpath)
 
 if __name__ == "__main__":
     example_of_usage()
