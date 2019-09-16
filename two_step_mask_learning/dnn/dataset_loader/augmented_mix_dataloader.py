@@ -92,7 +92,7 @@ class AugmentedOnlineMixingDataset(Dataset):
         self.n_sources = self.get_arg_and_check_validness(
             'n_sources',
             known_type=int,
-            extra_lambda_checks=[lambda x: x > 1])
+            extra_lambda_checks=[lambda x: x == 2])
 
         self.n_jobs = self.get_arg_and_check_validness(
                       'n_jobs',
@@ -226,13 +226,18 @@ class AugmentedOnlineMixingDataset(Dataset):
         return self.n_datasets - 1
 
     def get_selected_hierarchical_folder_index(
-            self, sample_idx, source_idx, dataset_idx):
+            self, sample_idx, source_idx, dataset_idx, not_equal_to=None):
         if self.random_draws is None:
             random_draw = np.random.random()
         else:
             random_draw = self.random_draws[sample_idx, source_idx, 1]
 
-        return int(random_draw * self.n_hierarchical_folders[dataset_idx])
+        ind = int(random_draw * self.n_hierarchical_folders[dataset_idx])
+        if not_equal_to is not None:
+            if ind == not_equal_to:
+                ind = (ind + 1) % self.n_hierarchical_folders[dataset_idx]
+
+        return ind
 
     def get_selected_sample_folder_index(
             self, sample_idx, source_idx, dataset_idx, hierarchical_folder_idx):
@@ -273,16 +278,25 @@ class AugmentedOnlineMixingDataset(Dataset):
         """
         sources_wavs_l = []
         energies = []
+        prev_indexes = []
 
         # Select with a prior probability between the list of datasets
         for source_idx in range(self.n_sources):
             dataset_idx = self.get_selected_dataset_index(
                 mixture_idx, source_idx)
+
+            # Avoid getting the same sound class inside the mixture
+            not_equal_to = None
+            if len(prev_indexes) > 0:
+                prev_d_ind, prev_h_ind = prev_indexes[0]
+                if prev_d_ind == dataset_idx:
+                    not_equal_to = prev_h_ind
             hier_folder_idx = self.get_selected_hierarchical_folder_index(
-                mixture_idx, source_idx, dataset_idx)
+                mixture_idx, source_idx, dataset_idx, not_equal_to=not_equal_to)
             wav_idx = self.get_selected_sample_folder_index(
                 mixture_idx, source_idx, dataset_idx, hier_folder_idx)
 
+            prev_indexes.append([dataset_idx, hier_folder_idx])
             item_folder = self.sample_folders[dataset_idx][hier_folder_idx][wav_idx]
             source_tensor = self.load_item_file(os.path.join(item_folder,
                                                              'wav'))
