@@ -321,7 +321,11 @@ class AugmentedOnlineMixingDataset(Dataset):
         clean_sources_tensor = torch.cat(sources_wavs_l)
         mixture_tensor = torch.sum(clean_sources_tensor, dim=0, keepdim=True)
 
-        return (mixture_tensor / (torch.std(mixture_tensor, dim=1) + 10e-8),
+        clean_sources_tensor -= torch.mean(clean_sources_tensor, dim=1,
+                                           keepdim=True)
+        mixture_tensor -= torch.mean(mixture_tensor, dim=1, keepdim=True)
+
+        return ((mixture_tensor / (torch.std(mixture_tensor, dim=1) + 10e-8)).squeeze(),
                 clean_sources_tensor / (torch.std(clean_sources_tensor,
                                                   dim=1, keepdim=True) + 10e-8))
 
