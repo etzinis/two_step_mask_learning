@@ -12,16 +12,24 @@ def get_args():
     """! Command line parser """
     parser = argparse.ArgumentParser(
         description='CometML Experiment Argument Parser')
-    parser.add_argument("--train", type=str,
+    parser.add_argument("--train", type=str, nargs='+',
                         help="Training dataset",
-                        default='WSJ2MIX8K',
+                        default=None,
                         choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD',
-                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD'])
-    parser.add_argument("--val", type=str,
+                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD',
+                                 'AUGMENTED_WSJMIX', 'AUGMENTED_ESC50'])
+    parser.add_argument("--val", type=str, nargs='+',
                         help="Validation dataset",
-                        default='WSJ2MIX8K',
+                        default=None,
                         choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD',
-                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD'])
+                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD',
+                                 'AUGMENTED_WSJMIX', 'AUGMENTED_ESC50'])
+    parser.add_argument("--train_val", type=str, nargs='+',
+                        help="Validating on the training dataset",
+                        default=None,
+                        choices=['WSJ2MIX8K', 'WSJ2MIX8KPAD',
+                                 'TIMITMF8K', 'WSJ2MIX8KNORMPAD',
+                                 'AUGMENTED_WSJMIX', 'AUGMENTED_ESC50'])
     parser.add_argument("-elp", "--experiment_logs_path", type=str,
                         help="""Path for logging experiment's audio.""",
                         default=None)
@@ -55,6 +63,30 @@ def get_args():
     parser.add_argument("--project_name", type=str,
                         help="""Name of current experiment""",
                         default="first_wsj02mix")
+
+    # Augmented Dataset parameters
+    parser.add_argument("-priors", "--datasets_priors", type=float, nargs='+',
+                        help="The prior probability of finding a sample from "
+                             "each given dataset. The length of this list "
+                             "must be equal to the number of dataset paths "
+                             "given above. The sum of this list must add up "
+                             "to 1.",
+                        default=[1])
+    parser.add_argument("-fs", type=float,
+                        help="""Sampling rate of the audio.""", default=8000.)
+    parser.add_argument("--selected_timelength", type=float,
+                        help="""The timelength of the sources that you want 
+                                to load in seconds.""",
+                        default=4.)
+    parser.add_argument("--max_abs_snr", type=float,
+                        help="""The maximum absolute value of the SNR of 
+                                the mixtures.""", default=2.5)
+    parser.add_argument("--fixed_seed", type=int,
+                        help="""Whether the dataset is going to be fixed (
+                            e.g. test partitions should be always fixed) give 
+                            the random seed. If seed is zero then it means that 
+                            the dataset is not going to be fixed.""",
+                        default=0)
 
     # device params
     parser.add_argument("-cad", "--cuda_available_devices", type=str,
