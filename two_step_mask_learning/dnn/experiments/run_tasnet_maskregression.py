@@ -28,37 +28,11 @@ import two_step_mask_learning.dnn.utils.metrics_logger as metrics_logger
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
-
+import two_step_mask_learning.dnn.experiments.utils.hparams_parser as \
+    hparams_parser
 
 args = parser.get_args()
-
-
-hparams = {
-    "train_dataset": args.train,
-    "val_dataset": args.val,
-    "experiment_name": args.experiment_name,
-    "project_name": args.project_name,
-    "R": args.tasnet_R,
-    "P": args.tasnet_P,
-    "X": args.tasnet_X,
-    "B": args.tasnet_B,
-    "H": args.tasnet_H,
-    "afe_reg": args.adaptive_fe_regularizer,
-    "n_kernel": args.n_kernel,
-    "n_basis": args.n_basis,
-    "bs": args.batch_size,
-    "n_jobs": args.n_jobs,
-    "tr_get_top": args.n_train,
-    "val_get_top": args.n_val,
-    "cuda_devs": args.cuda_available_devices,
-    "n_epochs": args.n_epochs,
-    "learning_rate": args.learning_rate,
-    "tags": args.cometml_tags,
-    "log_path": args.experiment_logs_path,
-    'weighted_norm': args.weighted_norm,
-    "metrics_log_path": args.metrics_logs_path,
-}
-
+hparams = hparams_parser.get_hparams_from_args(args)
 dataset_specific_params.update_hparams(hparams)
 if hparams["log_path"] is not None:
     audio_logger = log_audio.AudioLogger(hparams["log_path"],
@@ -81,15 +55,7 @@ else:
     experiment.set_name(experiment_name)
 
 # define data loaders
-train_gen, val_gen, tr_val_gen = dataloader.get_data_generators(
-    [hparams['train_dataset_path'],
-     hparams['val_dataset_path'], hparams['train_dataset_path']],
-    bs=hparams['bs'], n_jobs=hparams['n_jobs'],
-    get_top=[hparams['tr_get_top'],
-             hparams['val_get_top'],
-             hparams['val_get_top']],
-    return_items=hparams['return_items']
-)
+train_gen, val_gen, tr_val_gen = dataset_specific_params.get_data_loaders(hparams)
 
 back_loss_tr_loss_name, back_loss_tr_loss = (
     'tr_back_loss_mask_SISDR',
