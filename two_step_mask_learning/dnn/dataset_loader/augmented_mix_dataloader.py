@@ -109,7 +109,7 @@ class AugmentedOnlineMixingDataset(Dataset):
         self.return_items = self.get_arg_and_check_validness(
             'return_items',
             known_type=list,
-            choices=['wav', 'wav_norm'])
+            choices=['wav'])
 
         self.n_batches = int(self.n_samples / self.batch_size)
 
@@ -298,8 +298,8 @@ class AugmentedOnlineMixingDataset(Dataset):
 
             prev_indexes.append([dataset_idx, hier_folder_idx])
             item_folder = self.sample_folders[dataset_idx][hier_folder_idx][wav_idx]
-            source_tensor = self.load_item_file(os.path.join(item_folder,
-                                                             'wav'))
+            source_tensor = self.load_item_file(os.path.join(
+                item_folder, self.return_items[0]))
 
             # Random shifting of the source signals
             samples_delay = self.get_sample_delay(
@@ -344,23 +344,23 @@ def get_args():
                              "given above. The sum of this list must add up "
                              "to 1.",
                         default=None, required=True)
-    parser.add_argument("-bs", "--batch_size", type=int,
-                        help="""The number of samples in each batch. 
-                            Warning: Cannot be less than the number of 
-                            the validation samples""", default=3)
-    parser.add_argument("--max_abs_snr", type=float,
-                        help="""The maximum absolute value of the SNR of 
-                        the mixtures.""", default=2.5)
-    parser.add_argument("--n_sources", type=int,
-                        help="""The number of sources inside each mixture 
-                        which is generated""",
-                        default=2)
     parser.add_argument("-fs", type=float,
                         help="""Sampling rate of the audio.""", default=8000.)
     parser.add_argument("--selected_timelength", type=float,
                         help="""The timelength of the sources that you want 
-                        to load in seconds.""",
+                            to load in seconds.""",
                         default=4.)
+    parser.add_argument("--max_abs_snr", type=float,
+                        help="""The maximum absolute value of the SNR of 
+                            the mixtures.""", default=2.5)
+    parser.add_argument("-bs", "--batch_size", type=int,
+                        help="""The number of samples in each batch. 
+                            Warning: Cannot be less than the number of 
+                            the validation samples""", default=3)
+    parser.add_argument("--n_sources", type=int,
+                        help="""The number of sources inside each mixture 
+                        which is generated""",
+                        default=2)
     parser.add_argument("--n_jobs", type=int,
                         help="""The number of cpu workers for 
                             loading the data, etc.""", default=4)
@@ -379,7 +379,7 @@ def get_args():
                         choices which are based on the saved data 
                         names which are available. There is no type 
                         checking in this return argument.""",
-                        default=['wav', 'wav_norm'],
+                        default=['wav'],
                         choices=['wav', 'wav_norm'])
     return parser.parse_args()
 
