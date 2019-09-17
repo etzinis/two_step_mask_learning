@@ -324,10 +324,10 @@ class AugmentedOnlineMixingDataset(Dataset):
         clean_sources_tensor -= torch.mean(clean_sources_tensor, dim=1,
                                            keepdim=True)
         mixture_tensor -= torch.mean(mixture_tensor, dim=1, keepdim=True)
+        mixture_std = torch.std(mixture_tensor, dim=1)
 
-        return ((mixture_tensor / (torch.std(mixture_tensor, dim=1) + 10e-8)).squeeze(),
-                clean_sources_tensor / (torch.std(clean_sources_tensor,
-                                                  dim=1, keepdim=True) + 10e-8))
+        return ((mixture_tensor / (mixture_std + 10e-8)).squeeze(),
+                clean_sources_tensor / (mixture_std + 10e-8))
 
 
 def get_args():
