@@ -166,6 +166,12 @@ for i in range(hparams['n_epochs']):
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
     tr_step += 1
 
+    if tr_step % 30 == 0:
+        new_lr = hparams['learning_rate'] / (3. ** (tr_step // 30))
+        print('Reducing Learning rate to: {}'.format(new_lr))
+        for param_group in opt.param_groups:
+            param_group['lr'] = new_lr
+
     if val_gen is not None:
         model.eval()
         with torch.no_grad():

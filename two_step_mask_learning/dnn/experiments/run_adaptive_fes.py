@@ -139,7 +139,13 @@ for i in range(hparams['n_epochs']):
         l.backward()
         opt.step()
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
+
     tr_step += 1
+    if tr_step % 30 == 0:
+        new_lr = hparams['learning_rate'] / (3. ** (tr_step // 30))
+        print('Reducing Learning rate to: {}'.format(new_lr))
+        for param_group in opt.param_groups:
+            param_group['lr'] = new_lr
 
     if val_gen is not None:
         model.eval()
@@ -199,10 +205,10 @@ for i in range(hparams['n_epochs']):
 #         model.mix_encoder.conv.weight.squeeze().detach().cpu().numpy(),
 #         model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 #
-    # adaptive_fe.AdaptiveModulatorConvAE.save_if_best(
-    #     hparams['afe_dir'], model.module, opt, tr_step,
-    #     res_dic[back_loss_tr_loss_name]['mean'],
-    #     res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
+    adaptive_fe.AdaptiveModulatorConvAE.save_if_best(
+        hparams['afe_dir'], model.module, opt, tr_step,
+        res_dic[back_loss_tr_loss_name]['mean'],
+        res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
     for loss_name in res_dic:
         res_dic[loss_name]['acc'] = []
     pprint(res_dic)
