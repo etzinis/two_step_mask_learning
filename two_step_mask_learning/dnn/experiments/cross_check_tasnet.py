@@ -212,6 +212,11 @@ for i in range(hparams['n_epochs']):
                                                         experiment,
                                                         tr_step,
                                                         val_step)
+
+    tn_spectra.CTN.save_if_best(
+        hparams['tn_mask_dir'], model.module, opt, tr_step,
+        res_dic[back_loss_tr_loss_name]['mean'],
+        res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
     for loss_name in res_dic:
         res_dic[loss_name]['acc'] = []
     pprint(res_dic)
