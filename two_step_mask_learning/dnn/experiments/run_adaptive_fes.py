@@ -73,8 +73,9 @@ back_loss_tr_loss_name, back_loss_tr_loss = (
     'tr_back_loss_mask_SISDR',
     sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
                                  n_sources=hparams['n_sources'],
-                                 zero_mean=False,
-                                 backward_loss=True))
+                                 zero_mean=True,
+                                 backward_loss=True,
+                                 improvement=True))
 
 val_losses = dict([
     ('val_SISDRi', sisdr_lib.PermInvariantSISDR(batch_size=hparams['bs'],
@@ -111,7 +112,7 @@ experiment.log_parameter('Parameters', numparams)
 
 model = torch.nn.DataParallel(model).cuda()
 opt = torch.optim.Adam(model.module.parameters(), lr=hparams['learning_rate'])
-all_losses = all_losses = [back_loss_tr_loss_name] + \
+all_losses = [back_loss_tr_loss_name] + \
              [k for k in sorted(val_losses.keys())] + \
              [k for k in sorted(tr_val_losses.keys())]
 
