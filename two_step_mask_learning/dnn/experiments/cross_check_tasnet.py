@@ -25,38 +25,13 @@ import two_step_mask_learning.dnn.utils.metrics_logger as metrics_logger
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
 import two_step_mask_learning.dnn.experiments.utils.cmd_args_parser as parser
 import two_step_mask_learning.dnn.models.simplified_tasnet as ptasent
+import two_step_mask_learning.dnn.experiments.utils.hparams_parser as \
+    hparams_parser
 
 
 args = parser.get_args()
-# torch.backends.cudnn.benchmark = True
-# torch.backends.cudnn.enabled = False
-
-hparams = {
-    "train_dataset": args.train,
-    "val_dataset": args.val,
-    "experiment_name": args.experiment_name,
-    "project_name": args.project_name,
-    "R": args.tasnet_R,
-    "P": args.tasnet_P,
-    "X": args.tasnet_X,
-    "B": args.tasnet_B,
-    "H": args.tasnet_H,
-    "norm": args.norm_type,
-    "n_kernel": args.n_kernel,
-    "n_basis": args.n_basis,
-    "bs": args.batch_size,
-    "n_jobs": args.n_jobs,
-    "tr_get_top": args.n_train,
-    "val_get_top": args.n_val,
-    "cuda_devs": args.cuda_available_devices,
-    "n_epochs": args.n_epochs,
-    "learning_rate": args.learning_rate,
-    "return_items": args.return_items,
-    "tags": args.cometml_tags,
-    "log_path": args.experiment_logs_path,
-    "metrics_log_path": args.metrics_logs_path,
-    "tasnet_version": args.tasnet_version
-}
+hparams = hparams_parser.get_hparams_from_args(args)
+dataset_specific_params.update_hparams(hparams)
 
 dataset_specific_params.update_hparams(hparams)
 if hparams["log_path"] is not None:
@@ -78,16 +53,7 @@ else:
     experiment.set_name(experiment_name)
 
 # define data loaders
-train_gen, val_gen, train_val_gen = dataloader.get_data_generators(
-    [hparams['train_dataset_path'],
-     hparams['val_dataset_path'],
-     hparams['train_dataset_path']],
-    bs=hparams['bs'], n_jobs=hparams['n_jobs'],
-    get_top=[hparams['tr_get_top'],
-             hparams['val_get_top'],
-             hparams['val_get_top']],
-    return_items=hparams['return_items']
-)
+train_gen, val_gen, tr_val_gen = dataset_specific_params.get_data_loaders(hparams)
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
@@ -158,6 +124,7 @@ for i in range(hparams['n_epochs']):
         clean_wavs = data[-1].cuda()
 
         rec_sources_wavs = model(m1wavs)
+
         l = back_loss_tr_loss(rec_sources_wavs,
                               clean_wavs,
                               initial_mixtures=m1wavs)
@@ -194,7 +161,7 @@ for i in range(hparams['n_epochs']):
     if tr_val_losses.values():
         model.eval()
         with torch.no_grad():
-            for data in tqdm(train_val_gen, desc='Train Validation'):
+            for data in tqdm(tr_val_gen, desc='Train Validation'):
                 m1wavs = data[0].unsqueeze(1).cuda()
                 clean_wavs = data[-1].cuda()
 
@@ -213,7 +180,7 @@ for i in range(hparams['n_epochs']):
                                                         tr_step,
                                                         val_step)
 
-    tn_spectra.CTN.save_if_best(
+    ptasent.GLNFullThymiosCTN.save_if_best(
         hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
