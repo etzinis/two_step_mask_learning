@@ -1,5 +1,9 @@
 import torch
 import torch.nn as nn
+import os
+import glob2
+import datetime
+
 
 class CTN( nn.Module):
 
@@ -362,7 +366,8 @@ class GLNFullThymiosCTN(nn.Module):
         super(GLNFullThymiosCTN, self).__init__()
 
         # Number of sources to produce
-        self.S, self.N, self.L, self.B, self.H = S, N, L, B, H
+        self.S, self.N, self.L, self.B, self.H, self.P = S, N, L, B, H, P
+        self.X, self.R = X, R
 
         # Front end
         self.fe = nn.ModuleList([
@@ -452,7 +457,8 @@ class GLNFullThymiosCTN(nn.Module):
                     H=package['H'],
                     P=package['P'],
                     X=package['X'],
-                    R=package['R'])
+                    R=package['R'],
+                    S=package['S'])
         model.load_state_dict(package['state_dict'])
         return model
 
@@ -473,6 +479,7 @@ class GLNFullThymiosCTN(nn.Module):
             'P': model.P,
             'X': model.X,
             'R': model.R,
+            'S': model.S,
             'state_dict': model.state_dict(),
             'optim_dict': optimizer.state_dict(),
             'epoch': epoch,
