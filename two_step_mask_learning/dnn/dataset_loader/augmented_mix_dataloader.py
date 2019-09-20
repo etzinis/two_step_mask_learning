@@ -305,12 +305,15 @@ class AugmentedOnlineMixingDataset(Dataset):
             # Random shifting of the source signals
             samples_delay = self.get_sample_delay(
                 mixture_idx, source_idx, source_tensor.shape[-1])
-            source_tensor = source_tensor[
+            delayed_source_tensor = source_tensor[
                 :, samples_delay:samples_delay+self.selected_wav_samples]
 
+            if np.allclose(delayed_source_tensor, 0):
+                delayed_source_tensor = source_tensor[:, :self.selected_wav_samples]
+
             # Random SNR mixing
-            energies.append(torch.sqrt(torch.sum(source_tensor ** 2)))
-            sources_wavs_l.append(source_tensor)
+            energies.append(torch.sqrt(torch.sum(delayed_source_tensor ** 2)))
+            sources_wavs_l.append(delayed_source_tensor)
 
         snr_ratio = self.get_snr_ratio(mixture_idx, 0)
         new_energy_ratio = np.sqrt(np.power(10., snr_ratio / 10.))
@@ -327,8 +330,10 @@ class AugmentedOnlineMixingDataset(Dataset):
         mixture_tensor -= torch.mean(mixture_tensor, dim=1, keepdim=True)
         mixture_std = torch.std(mixture_tensor, dim=1)
 
-        return ((mixture_tensor / (mixture_std + 10e-8)).squeeze(),
-                clean_sources_tensor / (mixture_std + 10e-8))
+        returning_mixture = (mixture_tensor / (mixture_std + 10e-8)).squeeze()
+        returning_sources = clean_sources_tensor / (mixture_std + 10e-8)
+
+        return returning_mixture, returning_sources
 
 
 def get_args():
@@ -394,31 +399,6 @@ def get_data_gen_from_loader(data_loader):
     data_generator = DataLoader(data_loader,
                                 **generator_params)
     return data_generator
-
-
-def get_data_generators(
-    data_paths=[''],
-    bs=16,
-    n_jobs=3,
-    get_top=[None],
-    return_items=['mixture_wav',
-                  'clean_sources_wavs']):
-    assert len(get_top) == len(data_paths)
-    generators = []
-
-    for path, n_elements in zip(data_paths, get_top):
-        args = argparse.Namespace(
-            input_dataset_p=path,
-            batch_size=bs,
-            n_jobs=n_jobs,
-            get_top=n_elements,
-            return_items=return_items
-        )
-        subset_DS = AugmentedOnlineMixingDataset(**vars(args))
-        subset_gen = get_data_gen_from_loader(subset_DS)
-        generators.append(subset_gen)
-
-    return generators
 
 
 def example_of_usage(pytorch_dataloader_args):
