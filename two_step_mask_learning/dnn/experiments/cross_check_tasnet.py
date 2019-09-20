@@ -33,7 +33,6 @@ args = parser.get_args()
 hparams = hparams_parser.get_hparams_from_args(args)
 dataset_specific_params.update_hparams(hparams)
 
-dataset_specific_params.update_hparams(hparams)
 if hparams["log_path"] is not None:
     audio_logger = log_audio.AudioLogger(hparams["log_path"],
                                          hparams["fs"],
