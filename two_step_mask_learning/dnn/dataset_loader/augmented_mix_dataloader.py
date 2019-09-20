@@ -263,8 +263,8 @@ class AugmentedOnlineMixingDataset(Dataset):
         else:
             random_draw = self.random_draws[sample_idx, source_idx, 4]
 
-        # return (random_draw - 0.5) * self.max_abs_snr * 2
-        return np.random.normal(2.507, 2.1)
+        return (random_draw - 0.5) * self.max_abs_snr * 2
+        # return np.random.normal(2.507, 2.1)
 
     def __getitem__(self, mixture_idx):
         """!
