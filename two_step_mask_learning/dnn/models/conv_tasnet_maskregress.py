@@ -113,7 +113,7 @@ class CTN(nn.Module):
         # self.ln_out = nn.BatchNorm1d(self.n_sources * self.N)
         # self.ln_out = GlobalLayerNorm(self.n_sources * self.N)
 
-        if self.B != self.N or self.B == self.N:
+        if self.B != self.N:
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
@@ -131,7 +131,7 @@ class CTN(nn.Module):
         x = self.l1(x)
         for l in self.sm:
             x = l(x)
-        if self.B != self.N or self.B == self.N:
+        if self.B != self.N:
             x = self.out_reshape(x)
 
         x = self.ln_mask_in(x)
