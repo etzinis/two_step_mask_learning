@@ -404,6 +404,7 @@ class GLNFullThymiosCTN(nn.Module):
                                      output_padding=(L // 2) - 1, kernel_size=L,
                                      stride=L // 2, padding=L // 2,
                                      groups=S)
+        self.ln_mask_in = nn.BatchNorm1d(self.N)
 
     # Forward pass
     def forward(self, x):
@@ -424,8 +425,10 @@ class GLNFullThymiosCTN(nn.Module):
             # x = self.ln_bef_out_reshape(x)
             x = self.reshape_before_masks(x)
 
+        x = self.ln_mask_in(x)
         # Get masks and apply them
         x = self.m(x.unsqueeze(1))
+        x = nn.functional.relu(x)
         if self.S == 1:
             x = torch.sigmoid(x)
         else:
