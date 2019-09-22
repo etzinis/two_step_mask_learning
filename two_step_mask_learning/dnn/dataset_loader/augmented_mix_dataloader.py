@@ -15,6 +15,7 @@ import joblib
 import sys
 import numpy as np
 import torch
+from time import time
 
 current_dir = os.path.dirname(os.path.abspath('__file__'))
 root_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
@@ -277,6 +278,10 @@ class AugmentedOnlineMixingDataset(Dataset):
         @throws If one of the desired objects cannot be loaded from
         disk then an IOError would be raised
         """
+        if self.random_draws is None:
+            the_time = int(np.modf(time())[0] * 100000000)
+            np.random.seed(the_time)
+
         sources_wavs_l = []
         energies = []
         prev_indexes = []
@@ -430,6 +435,43 @@ def example_of_usage(pytorch_dataloader_args):
             batch_cnt += 1
 
 
+def test_truly_random_generator():
+    WSJ_MIX_HIERARCHICAL_P = '/mnt/nvme/hierarchical_sound_datasets/WSJ0_mix_partitioned/train'
+    ESC50_HIERARCHICAL_P = '/mnt/nvme/hierarchical_sound_datasets/ESC50_partitioned/train'
+    these_args = argparse.Namespace(
+        input_dataset_p=[WSJ_MIX_HIERARCHICAL_P, ESC50_HIERARCHICAL_P],
+        datasets_priors=[0.5, 0.5],
+        batch_size=1,
+        n_jobs=4,
+        n_samples=2,
+        return_items=['wav'],
+        fs=8000.,
+        selected_timelength=4.,
+        n_sources=2,
+        max_abs_snr=2.5,
+        fixed_seed=0
+    )
+
+    data_loader = AugmentedOnlineMixingDataset(**vars(these_args))
+    gen = get_data_gen_from_loader(data_loader)
+
+    for mixture, sources in gen:
+        prev_mix_wav = mixture.squeeze()
+        prev_s1_wav = sources.squeeze()[0]
+        prev_s2_wav = sources.squeeze()[1]
+
+    for i in range(500):
+        for mixture, sources in gen:
+            mix_wav = mixture.squeeze()
+            s1_wav = sources.squeeze()[0]
+            s2_wav = sources.squeeze()[1]
+            if (torch.allclose(mix_wav, prev_mix_wav) or
+                torch.allclose(s1_wav, prev_s1_wav) or
+                torch.allclose(s2_wav, prev_s2_wav)):
+                raise ValueError('Dataset generator is not truly random')
+
+
 if __name__ == "__main__":
-    pytorch_dataloader_args = get_args()
-    example_of_usage(pytorch_dataloader_args)
+    # pytorch_dataloader_args = get_args()
+    # example_of_usage(pytorch_dataloader_args)
+    test_truly_random_generator()
