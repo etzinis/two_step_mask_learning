@@ -83,15 +83,29 @@ tr_val_losses = dict([
                                                improvement=True,
                                                return_individual_results=True))])
 
-model = ptasent.GLNFullThymiosCTN(
-    B=hparams['B'],
-    H=hparams['H'],
-    P=hparams['P'],
-    R=hparams['R'],
-    X=hparams['X'],
-    L=hparams['n_kernel'],
-    N=hparams['n_basis'],
-    S=2)
+if hparams['tasnet_type'] == 'simple':
+    model = ptasent.GLNFullThymiosCTN(
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        R=hparams['R'],
+        X=hparams['X'],
+        L=hparams['n_kernel'],
+        N=hparams['n_basis'],
+        S=2)
+elif hparams['tasnet_type'] == 'residual':
+    model = ptasent.ResidualTN(
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        R=hparams['R'],
+        X=hparams['X'],
+        L=hparams['n_kernel'],
+        N=hparams['n_basis'],
+        S=2)
+else:
+    raise NotImplementedError(
+        'Tasnet type: {} is not yet available.'.format(hparams['tasnet_type']))
 
 numparams = 0
 for f in model.parameters():
