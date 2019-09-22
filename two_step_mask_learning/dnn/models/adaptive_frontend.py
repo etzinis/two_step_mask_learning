@@ -212,8 +212,11 @@ class AdaptiveModulatorConvAE(nn.Module):
 
     @classmethod
     def load_best_model(cls, models_dir, regularizer, freq_res, sample_res):
+        print('asdfasddfsasfdasfda')
+        print(models_dir)
         dir_id = 'reg_{}_L_{}_N_{}'.format(regularizer, freq_res, sample_res)
         dir_path = os.path.join(models_dir, dir_id)
+        print(dir_path)
         best_path = glob2.glob(dir_path + '/best_*')[0]
         return cls.load(best_path)
 
