@@ -751,13 +751,27 @@ class ResidualTN(nn.Module):
         # -1 is the input to the sequence and the other indexes are the same
         # as the dilation exponent.
         residual_to_from = [
-            [], [-1], [], [-1, 1],
-            [], [3], [], [-1, 3, 5]]
+            [], [], [], [-1],
+            [], [], [], [-1, 3, 5]]
 
         def __init__(self, B, H, P, X):
             super(ResidualTN.TCNSequence, self).__init__()
             self.tcns = nn.ModuleList([
                 ResidualTN.TCN(B=B, H=H, P=P, D=2 ** i) for i in range(X)])
+
+            # Define 1x1 convs for gathering the residual connections
+            self.residual_denses = nn.ModuleList([
+                nn.Conv1d(in_channels=len(res_connections) * B,
+                          out_channels=B, kernel_size=1)
+                for res_connections in self.residual_to_from
+                if len(res_connections) > 0
+            ])
+            self.layer_to_dense = {}
+            j = 0
+            for i, res_connections in enumerate(self.residual_to_from):
+                if len(res_connections):
+                    self.layer_to_dense[i] = j
+                    j += 1
 
         def forward(self, x):
             initial_input = x.clone()
@@ -767,17 +781,20 @@ class ResidualTN(nn.Module):
             layer_outputs = []
             for l, tcn in enumerate(self.tcns):
                 # gather residuals
-                residual_outputs = None
+                residual_outputs = []
                 for res_ind in self.residual_to_from[l]:
                     if res_ind == -1:
-                        residual_outputs = initial_input.clone()
-                    elif residual_outputs is None:
-                        residual_outputs = layer_outputs[res_ind]
+                        residual_outputs.append(initial_input.clone())
                     else:
-                        residual_outputs += layer_outputs[res_ind]
+                        residual_outputs.append(layer_outputs[res_ind])
 
-                if residual_outputs is not None:
-                    x = tcn(x + residual_outputs)
+                if residual_outputs:
+                    if len(residual_outputs) == 1:
+                        residuals = residual_outputs[0]
+                    else:
+                        residuals = torch.cat(residual_outputs, dim=1)
+                    x = tcn(x + self.residual_denses[
+                        self.layer_to_dense[l]](residuals))
                 else:
                     x = tcn(x)
                 layer_outputs.append(x.clone())
