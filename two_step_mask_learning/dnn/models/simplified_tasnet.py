@@ -745,61 +745,61 @@ class ResidualTN(nn.Module):
                 y = l(y)
             return x + y
 
-    # DilatedConv blocks which is a chain of TCN blocks
-    class TCNSequence(nn.Module):
-        # defines the reverse graph of connections.
-        # -1 is the input to the sequence and the other indexes are the same
-        # as the dilation exponent.
-        residual_to_from = [
-            [], [], [], [-1],
-            [], [], [], [-1, 3, 5]]
-
-        def __init__(self, B, H, P, X):
-            super(ResidualTN.TCNSequence, self).__init__()
-            self.tcns = nn.ModuleList([
-                ResidualTN.TCN(B=B, H=H, P=P, D=2 ** i) for i in range(X)])
-
-            # Define 1x1 convs for gathering the residual connections
-            self.residual_denses = nn.ModuleList([
-                nn.Conv1d(in_channels=len(res_connections) * B,
-                          out_channels=B, kernel_size=1)
-                for res_connections in self.residual_to_from
-                if len(res_connections) > 0
-            ])
-            self.layer_to_dense = {}
-            j = 0
-            for i, res_connections in enumerate(self.residual_to_from):
-                if len(res_connections):
-                    self.layer_to_dense[i] = j
-                    j += 1
-
-        def forward(self, x):
-            initial_input = x.clone()
-            # Clean forward pass and adding residual connections when it is
-            # needed
-
-            layer_outputs = []
-            for l, tcn in enumerate(self.tcns):
-                # gather residuals
-                residual_outputs = []
-                for res_ind in self.residual_to_from[l]:
-                    if res_ind == -1:
-                        residual_outputs.append(initial_input.clone())
-                    else:
-                        residual_outputs.append(layer_outputs[res_ind])
-
-                if residual_outputs:
-                    if len(residual_outputs) == 1:
-                        residuals = residual_outputs[0]
-                    else:
-                        residuals = torch.cat(residual_outputs, dim=1)
-                    x = tcn(x + self.residual_denses[
-                        self.layer_to_dense[l]](residuals))
-                else:
-                    x = tcn(x)
-                layer_outputs.append(x.clone())
-
-            return x
+    # # DilatedConv blocks which is a chain of TCN blocks
+    # class TCNSequence(nn.Module):
+    #     # defines the reverse graph of connections.
+    #     # -1 is the input to the sequence and the other indexes are the same
+    #     # as the dilation exponent.
+    #     residual_to_from = [
+    #         [], [], [], [-1],
+    #         [], [], [], [-1, 3, 5]]
+    #
+    #     def __init__(self, B, H, P, X):
+    #         super(ResidualTN.TCNSequence, self).__init__()
+    #         self.tcns = nn.ModuleList([
+    #             ResidualTN.TCN(B=B, H=H, P=P, D=2 ** i) for i in range(X)])
+    #
+    #         # Define 1x1 convs for gathering the residual connections
+    #         self.residual_denses = nn.ModuleList([
+    #             nn.Conv1d(in_channels=len(res_connections) * B,
+    #                       out_channels=B, kernel_size=1)
+    #             for res_connections in self.residual_to_from
+    #             if len(res_connections) > 0
+    #         ])
+    #         self.layer_to_dense = {}
+    #         j = 0
+    #         for i, res_connections in enumerate(self.residual_to_from):
+    #             if len(res_connections):
+    #                 self.layer_to_dense[i] = j
+    #                 j += 1
+    #
+    #     def forward(self, x):
+    #         initial_input = x.clone()
+    #         # Clean forward pass and adding residual connections when it is
+    #         # needed
+    #
+    #         layer_outputs = []
+    #         for l, tcn in enumerate(self.tcns):
+    #             # gather residuals
+    #             residual_outputs = []
+    #             for res_ind in self.residual_to_from[l]:
+    #                 if res_ind == -1:
+    #                     residual_outputs.append(initial_input.clone())
+    #                 else:
+    #                     residual_outputs.append(layer_outputs[res_ind])
+    #
+    #             if residual_outputs:
+    #                 if len(residual_outputs) == 1:
+    #                     residuals = residual_outputs[0]
+    #                 else:
+    #                     residuals = torch.cat(residual_outputs, dim=1)
+    #                 x = tcn(x + self.residual_denses[
+    #                     self.layer_to_dense[l]](residuals))
+    #             else:
+    #                 x = tcn(x)
+    #             layer_outputs.append(x.clone())
+    #
+    #         return x
 
     # Set things up
     def __init__(self, N, L, B, H, P, X, R, S=1):
@@ -820,8 +820,31 @@ class ResidualTN(nn.Module):
         self.l1 = nn.Conv1d(in_channels=N, out_channels=B, kernel_size=1)
 
         # Separation module
+        # Residual connections
+        self.residual_to_from = [[] for _ in range(R*X)]
+        self.residual_to_from[8] = [-1]
+        self.residual_to_from[16] = [-1, 8]
+        self.residual_to_from[24] = [-1, 8, 16]
+        # self.residual_to_from[11] = [3]
+        # self.residual_to_from[19] = [3, 11]
+        # self.residual_to_from[27] = [3, 11, 19]
+        self.layer_to_dense = {}
+        j = 0
+        for i, res_connections in enumerate(self.residual_to_from):
+            if len(res_connections):
+                self.layer_to_dense[i] = j
+                j += 1
+
+        self.residual_denses = nn.ModuleList([
+            nn.Conv1d(in_channels=len(res_connections) * B,
+                      out_channels=B, kernel_size=1)
+            for res_connections in self.residual_to_from
+            if len(res_connections) > 0
+        ])
+
         self.sm = nn.ModuleList(
-            [ResidualTN.TCNSequence(B=B, H=H, P=P, X=X) for _ in range(R)])
+            [ResidualTN.TCN(B=B, H=H, P=P, D=2 ** d)
+             for _ in range(R) for d in range(X)])
 
         if B != N:
             self.reshape_before_masks = nn.Conv1d(in_channels=B,
@@ -853,8 +876,31 @@ class ResidualTN(nn.Module):
         # Separation module
         x = self.ln(x)
         x = self.l1(x)
-        for l in self.sm:
-            x = l(x)
+        separation_input = x.clone()
+
+        layer_outputs = []
+        for l, tcn in enumerate(self.sm):
+            # gather residuals
+            residual_outputs = []
+            for res_ind in self.residual_to_from[l]:
+                if res_ind == -1:
+                    residual_outputs.append(separation_input)
+                else:
+                    residual_outputs.append(layer_outputs[res_ind])
+
+            if residual_outputs:
+                if len(residual_outputs) == 1:
+                    residuals = residual_outputs[0]
+                else:
+                    residuals = torch.cat(residual_outputs, dim=1)
+                x = tcn(x + self.residual_denses[
+                    self.layer_to_dense[l]](residuals))
+            else:
+                x = tcn(x)
+            if l in [8, 16, 24]:
+                layer_outputs.append(x.clone())
+            else:
+                layer_outputs.append(None)
 
         if self.B != self.N:
             # x = self.ln_bef_out_reshape(x)
