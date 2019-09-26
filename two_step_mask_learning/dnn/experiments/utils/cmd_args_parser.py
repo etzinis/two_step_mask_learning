@@ -156,5 +156,14 @@ def get_args():
                         experiment should run""", default=50)
     parser.add_argument("-lr", "--learning_rate", type=float,
                         help="""Initial Learning rate""", default=1e-2)
+    parser.add_argument("--divide_lr_by", type=float,
+                        help="""The factor that the learning rate 
+                        would be divided by""", default=1.)
+    parser.add_argument("--reduce_lr_every", type=float,
+                        help="""Reduce learning rate every how many 
+                        training epochs? 0 means that the learning 
+                        rate is not going to be divided by the 
+                        specified factor.""",
+                        default=0)
 
     return parser.parse_args()

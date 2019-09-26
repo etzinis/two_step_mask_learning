@@ -21,9 +21,8 @@ import two_step_mask_learning.dnn.experiments.utils.dataset_specific_params \
     as dataset_specific_params
 import two_step_mask_learning.dnn.losses.sisdr as sisdr_lib
 import two_step_mask_learning.dnn.losses.norm as norm_lib
-import two_step_mask_learning.dnn.losses.bce as bce_lib
 import two_step_mask_learning.dnn.models.conv_tasnet_maskregress as tn_mask
-import two_step_mask_learning.dnn.utils.cometml_learned_masks as masks_vis
+#import two_step_mask_learning.dnn.utils.cometml_learned_masks as masks_vis
 import two_step_mask_learning.dnn.utils.metrics_logger as metrics_logger
 import two_step_mask_learning.dnn.utils.cometml_loss_report as cometml_report
 import two_step_mask_learning.dnn.utils.log_audio as log_audio
@@ -85,18 +84,38 @@ tr_val_losses = dict([
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
 
-model = tn_mask.CTN(
-    N=hparams['n_basis'],
-    L=hparams['n_kernel'],
-    B=hparams['B'],
-    H=hparams['H'],
-    P=hparams['P'],
-    X=hparams['X'],
-    R=hparams['R'],
-    n_sources=hparams['n_sources'],
-    afe_dir_path=hparams['afe_dir'],
-    afe_reg=hparams['afe_reg'],
-    weighted_norm=hparams['weighted_norm'])
+if hparams['tasnet_type'] == 'simple':
+    model = tn_mask.CTN(
+        N=hparams['n_basis'],
+        L=hparams['n_kernel'],
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        X=hparams['X'],
+        R=hparams['R'],
+        n_sources=hparams['n_sources'],
+        afe_dir_path=hparams['afe_dir'],
+        afe_reg=hparams['afe_reg'],
+        weighted_norm=hparams['weighted_norm'])
+elif hparams['tasnet_type'] == 'residual':
+    model = tn_mask.ResidualTN(
+        N=hparams['n_basis'],
+        L=hparams['n_kernel'],
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        X=hparams['X'],
+        R=hparams['R'],
+        n_sources=hparams['n_sources'],
+        afe_dir_path=hparams['afe_dir'],
+        afe_reg=hparams['afe_reg'],
+        weighted_norm=hparams['weighted_norm'])
+else:
+    raise NotImplementedError(
+        'Tasnet type: {} is not yet available.'.format(hparams['tasnet_type']))
+
+
+
 
 numparams = 0
 for f in model.parameters():
@@ -137,11 +156,13 @@ for i in range(hparams['n_epochs']):
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
     tr_step += 1
 
-    # if tr_step % 30 == 0:
-    #     new_lr = hparams['learning_rate'] / (3. ** (tr_step // 30))
-    #     print('Reducing Learning rate to: {}'.format(new_lr))
-    #     for param_group in opt.param_groups:
-    #         param_group['lr'] = new_lr
+    if hparams['reduce_lr_every'] > 0:
+        if tr_step % hparams['reduce_lr_every'] == 0:
+            new_lr = (hparams['learning_rate']
+                      / (hparams['divide_lr_by'] ** (tr_step // hparams['reduce_lr_every'])))
+            print('Reducing Learning rate to: {}'.format(new_lr))
+            for param_group in opt.param_groups:
+                param_group['lr'] = new_lr
 
     if val_gen is not None:
         model.eval()
