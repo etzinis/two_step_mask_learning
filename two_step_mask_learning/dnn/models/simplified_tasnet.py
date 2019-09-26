@@ -825,9 +825,9 @@ class ResidualTN(nn.Module):
         self.residual_to_from[8] = [-1]
         self.residual_to_from[16] = [-1, 8]
         self.residual_to_from[24] = [-1, 8, 16]
-        # self.residual_to_from[11] = [3]
-        # self.residual_to_from[19] = [3, 11]
-        # self.residual_to_from[27] = [3, 11, 19]
+        self.residual_to_from[11] = [3]
+        self.residual_to_from[19] = [3, 11]
+        self.residual_to_from[27] = [3, 11, 19]
         self.layer_to_dense = {}
         j = 0
         for i, res_connections in enumerate(self.residual_to_from):
@@ -897,7 +897,7 @@ class ResidualTN(nn.Module):
                     self.layer_to_dense[l]](residuals))
             else:
                 x = tcn(x)
-            if l in [8, 16, 24]:
+            if l in [8, 16, 24, 3, 11, 19]:
                 layer_outputs.append(x.clone())
             else:
                 layer_outputs.append(None)
