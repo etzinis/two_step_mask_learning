@@ -84,6 +84,7 @@ tr_val_losses = dict([
                                                return_individual_results=True))])
 
 if hparams['tasnet_type'] == 'simple':
+    model_class = ptasent.GLNFullThymiosCTN
     model = ptasent.GLNFullThymiosCTN(
         B=hparams['B'],
         H=hparams['H'],
@@ -94,6 +95,7 @@ if hparams['tasnet_type'] == 'simple':
         N=hparams['n_basis'],
         S=2)
 elif hparams['tasnet_type'] == 'residual':
+    model_class = ptasent.ResidualTN
     model = ptasent.ResidualTN(
         B=hparams['B'],
         H=hparams['H'],
@@ -146,11 +148,13 @@ for i in range(hparams['n_epochs']):
         res_dic[back_loss_tr_loss_name]['acc'].append(l.item())
     tr_step += 1
 
-    # if tr_step % 30 == 0:
-    #     new_lr = hparams['learning_rate'] / (3. ** (tr_step // 30))
-    #     print('Reducing Learning rate to: {}'.format(new_lr))
-    #     for param_group in opt.param_groups:
-    #         param_group['lr'] = new_lr
+    if hparams['reduce_lr_every'] > 0:
+        if tr_step % hparams['reduce_lr_every'] == 0:
+            new_lr = (hparams['learning_rate']
+                      / (hparams['divide_lr_by'] ** (tr_step // hparams['reduce_lr_every'])))
+            print('Reducing Learning rate to: {}'.format(new_lr))
+            for param_group in opt.param_groups:
+                param_group['lr'] = new_lr
 
     if val_gen is not None:
         model.eval()
@@ -193,7 +197,7 @@ for i in range(hparams['n_epochs']):
                                                         tr_step,
                                                         val_step)
 
-    ptasent.GLNFullThymiosCTN.save_if_best(
+    model_class.save_if_best(
         hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))

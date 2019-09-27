@@ -82,18 +82,39 @@ tr_val_losses = dict([
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
 
-model = tn_spectra.CTN(
-    N=hparams['n_basis'],
-    L=hparams['n_kernel'],
-    B=hparams['B'],
-    H=hparams['H'],
-    P=hparams['P'],
-    X=hparams['X'],
-    R=hparams['R'],
-    n_sources=hparams['n_sources'],
-    afe_dir_path=hparams['afe_dir'],
-    afe_reg=hparams['afe_reg'],
-    weighted_norm=hparams['weighted_norm'])
+if hparams['tasnet_type'] == 'simple':
+    model_class = tn_spectra.CTN
+    model = tn_spectra.CTN(
+        N=hparams['n_basis'],
+        L=hparams['n_kernel'],
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        X=hparams['X'],
+        R=hparams['R'],
+        n_sources=hparams['n_sources'],
+        afe_dir_path=hparams['afe_dir'],
+        afe_reg=hparams['afe_reg'],
+        weighted_norm=hparams['weighted_norm'])
+elif hparams['tasnet_type'] == 'residual':
+    model_class = tn_spectra.ResidualTN
+    model = tn_spectra.ResidualTN(
+        N=hparams['n_basis'],
+        L=hparams['n_kernel'],
+        B=hparams['B'],
+        H=hparams['H'],
+        P=hparams['P'],
+        X=hparams['X'],
+        R=hparams['R'],
+        n_sources=hparams['n_sources'],
+        afe_dir_path=hparams['afe_dir'],
+        afe_reg=hparams['afe_reg'],
+        weighted_norm=hparams['weighted_norm'])
+else:
+    raise NotImplementedError(
+        'Tasnet type: {} is not yet available.'.format(hparams['tasnet_type']))
+
+
 
 numparams = 0
 for f in model.parameters():
@@ -213,7 +234,7 @@ for i in range(hparams['n_epochs']):
     #     model.encoder.conv.weight.squeeze().detach().cpu().numpy(),
     #     model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 
-    tn_spectra.CTN.save_if_best(
+    model_class.save_if_best(
         hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))

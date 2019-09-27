@@ -85,6 +85,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([cad
                                                for cad in hparams['cuda_devs']])
 
 if hparams['tasnet_type'] == 'simple':
+    model_class = tn_mask.CTN
     model = tn_mask.CTN(
         N=hparams['n_basis'],
         L=hparams['n_kernel'],
@@ -98,6 +99,7 @@ if hparams['tasnet_type'] == 'simple':
         afe_reg=hparams['afe_reg'],
         weighted_norm=hparams['weighted_norm'])
 elif hparams['tasnet_type'] == 'residual':
+    model_class = tn_mask.ResidualTN
     model = tn_mask.ResidualTN(
         N=hparams['n_basis'],
         L=hparams['n_kernel'],
@@ -231,7 +233,7 @@ for i in range(hparams['n_epochs']):
     #     model.encoder.conv.weight.squeeze().detach().cpu().numpy(),
     #     model.decoder.deconv.weight.squeeze().detach().cpu().numpy())
 
-    tn_mask.CTN.save_if_best(
+    model_class.save_if_best(
         hparams['tn_mask_dir'], model.module, opt, tr_step,
         res_dic[back_loss_tr_loss_name]['mean'],
         res_dic[val_loss_name]['mean'], val_loss_name.replace("_", ""))
