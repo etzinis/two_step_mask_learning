@@ -842,6 +842,17 @@ class ResidualTN(nn.Module):
             if len(res_connections) > 0
         ])
 
+        self.prev_connections = {}
+        self.residual_norms = []
+        k = 0
+        for res_from in self.residual_to_from:
+            for res_ind in res_from:
+                if res_ind not in self.prev_connections:
+                    self.prev_connections[res_ind] = k
+                    k += 1
+                    self.residual_norms.append(CepstralNorm(B))
+        self.residual_norms = nn.ModuleList(self.residual_norms)
+
         self.sm = nn.ModuleList(
             [ResidualTN.TCN(B=B, H=H, P=P, D=2 ** d)
              for _ in range(R) for d in range(X)])
@@ -882,16 +893,21 @@ class ResidualTN(nn.Module):
         for l, tcn in enumerate(self.sm):
             # gather residuals
             residual_outputs = []
-            for res_ind in self.residual_to_from[l]:
+            for k, res_ind in enumerate(self.residual_to_from[l]):
                 if res_ind == -1:
-                    residual_outputs.append(separation_input)
+                    residual_outputs.append(self.residual_norms[
+                        self.prev_connections[res_ind]](
+                        separation_input))
                 else:
-                    residual_outputs.append(layer_outputs[res_ind])
+                    residual_outputs.append(self.residual_norms[
+                        self.prev_connections[res_ind]](
+                        layer_outputs[res_ind]))
 
             if residual_outputs:
                 if len(residual_outputs) == 1:
                     residuals = residual_outputs[0]
                 else:
+                    # Before concatenation normalize everything
                     residuals = torch.cat(residual_outputs, dim=1)
                 x = tcn(x + self.residual_denses[
                     self.layer_to_dense[l]](residuals))
@@ -948,7 +964,7 @@ class ResidualTN(nn.Module):
 
     @classmethod
     def load_best_model(cls, models_dir, freq_res, sample_res):
-        dir_id = 'residualTN_L_{}_N_{}'.format(sample_res, freq_res)
+        dir_id = 'residualTN_new_L_{}_N_{}'.format(sample_res, freq_res)
         dir_path = os.path.join(models_dir, dir_id)
         best_path = glob2.glob(dir_path + '/best_*')[0]
         return cls.load(best_path)
@@ -994,7 +1010,8 @@ class ResidualTN(nn.Module):
 
     @classmethod
     def encode_dir_name(cls, model):
-        model_dir_name = 'residualTN_L_{}_N_{}'.format(model.L, model.N)
+        model_dir_name = 'residualTN_new_L_{}_N_{}'.format(
+            model.L, model.N)
         return model_dir_name
 
     @classmethod
