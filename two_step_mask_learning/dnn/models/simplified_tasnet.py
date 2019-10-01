@@ -729,13 +729,13 @@ class ResidualTN(nn.Module):
             self.m = nn.ModuleList([
                 nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
                 nn.PReLU(),
-                # GlobalLayerNorm(H),
-                CepstralNorm(H),
+                GlobalLayerNorm(H),
+                # CepstralNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
                           padding=(D * (P - 1)) // 2, dilation=D, groups=H),
                 nn.PReLU(),
-                # GlobalLayerNorm(H),
-                CepstralNorm(H),
+                GlobalLayerNorm(H),
+                # CepstralNorm(H),
                 nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
             ])
 
@@ -850,7 +850,7 @@ class ResidualTN(nn.Module):
                 if res_ind not in self.prev_connections:
                     self.prev_connections[res_ind] = k
                     k += 1
-                    self.residual_norms.append(CepstralNorm(B))
+                    self.residual_norms.append(GlobalLayerNorm(B))
         self.residual_norms = nn.ModuleList(self.residual_norms)
 
         self.sm = nn.ModuleList(
