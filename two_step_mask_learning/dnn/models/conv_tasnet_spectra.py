@@ -117,7 +117,7 @@ class CTN(nn.Module):
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
-        self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        self.ln_mask_in = nn.BatchNorm1d(self.N)
         # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
@@ -427,7 +427,7 @@ class ResidualTN(nn.Module):
             self.out_reshape = nn.Conv1d(in_channels=B,
                                          out_channels=N,
                                          kernel_size=1)
-        self.ln_mask_in = nn.BatchNorm1d(min(self.B, self.N))
+        self.ln_mask_in = nn.BatchNorm1d(self.N)
         # self.ln_mask_in = GlobalLayerNorm(min(self.B, self.N))
 
 
