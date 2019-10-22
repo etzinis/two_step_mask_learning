@@ -41,4 +41,4 @@ TNMASK_WSJ_MIX_2_8K_NORMPAD = '/home/thymios/tn_mask/norm_pad/'
 TNMASK_AUGMENTED = '/home/thymios/tn_mask/augmented/'
 
 
-API_KEY = '66xB8zZUV1IVstsauUe6royLR'
+API_KEY = 'your_comet_ml_key'
