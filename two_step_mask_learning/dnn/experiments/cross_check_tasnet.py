@@ -1,5 +1,5 @@
 """!
-@brief Run an initial CometML experiment
+@brief Run an initial CometML experiment with multiple
 
 @author Efthymios Tzinis {etzinis2@illinois.edu}
 @copyright University of Illinois at Urbana-Champaign
@@ -84,8 +84,8 @@ tr_val_losses = dict([
                                                return_individual_results=True))])
 
 if hparams['tasnet_type'] == 'simple':
-    model_class = ptasent.GLNFullThymiosCTN
-    model = ptasent.GLNFullThymiosCTN(
+    model_class = ptasent.TDCN
+    model = ptasent.TDCN(
         B=hparams['B'],
         H=hparams['H'],
         P=hparams['P'],

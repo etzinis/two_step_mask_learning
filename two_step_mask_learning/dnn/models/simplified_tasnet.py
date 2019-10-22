@@ -1,3 +1,10 @@
+"""!
+@brief TasNet Wrapper for time-domain signal estimation.
+
+@author Efthymios Tzinis {etzinis2@illinois.edu}
+@copyright University of Illinois at Urbana-Champaign
+"""
+
 import torch
 import torch.nn as nn
 import os
@@ -5,342 +12,12 @@ import glob2
 import datetime
 
 
-class CTN( nn.Module):
-
-    # Simplified TCN layer
-    class TCN( nn.Module):
-        def __init__( self, B, P, D):
-            super( CTN.TCN, self).__init__()
-
-            self.m = nn.ModuleList( [
-              nn.Conv1d( in_channels=B, out_channels=B, kernel_size=P,
-                        padding=(D*(P-1))//2, dilation=D),
-              nn.Softplus(),
-              nn.BatchNorm1d( B),
-            ])
-
-        def forward(self, x):
-            y = x.clone()
-            for l in self.m:
-                y = l( y)
-            return x+y
-
-    # Set things up
-    def __init__( self, N, L, B, P, X, R, S=1):
-        super( CTN, self).__init__()
-
-        # Number of sources to produce
-        self.S = S
-
-        # Front end
-        self.fe = nn.ModuleList( [
-          nn.Conv1d( in_channels=1, out_channels=N,
-                    kernel_size=L, stride=L//2, padding=L//2),
-          nn.Softplus(),
-        ])
-
-        # Norm before the rest, and apply one more dense layer
-        self.ln = nn.BatchNorm1d( N)
-        self.l1 = nn.Conv1d( in_channels=N, out_channels=B, kernel_size=1)
-
-        # Separation module
-        self.sm = nn.ModuleList([
-            CTN.TCN( B=B, P=P, D=2**d) for _ in range( R) for d in range( X)
-        ])
-
-        # Masks layer
-        self.m = nn.Conv2d( in_channels=1, out_channels=S, kernel_size=(N+1,1), padding=(N-B//2,0))
-
-        # Back end
-        self.be = nn.ConvTranspose1d( in_channels=N*S, out_channels=S,
-                 output_padding=9, kernel_size=L, stride=L//2, padding=L//2, groups=S)
-
-    # Forward pass
-    def forward( self, x):
-        # Front end
-        for l in self.fe:
-            x = l( x)
-
-        # Split paths
-        s = x.clone()
-
-        # Separation module
-        x = self.ln(x)
-        x = self.l1(x)
-        for l in self.sm:
-            x = l(x)
-
-        # Get masks and apply them
-        x = self.m( x.unsqueeze( 1))
-        if self.S == 1:
-            x = torch.sigmoid( x)
-        else:
-            x = nn.functional.softmax( x, dim=1)
-        x = x * s.unsqueeze(1)
-        del s
-
-        # Back end
-        return self.be( x.view(x.shape[0],-1,x.shape[-1]))
-
-
-class ThymiosCTN( nn.Module):
-
-    # Simplified TCN layer
-    class TCN( nn.Module):
-        def __init__( self, B, P, D):
-            super(ThymiosCTN.TCN, self).__init__()
-
-            self.m = nn.ModuleList( [
-                nn.Conv1d(in_channels=B, out_channels=B, kernel_size=P,
-                          padding=(D*(P-1))//2, dilation=D, groups=1),
-                nn.PReLU(),
-                nn.BatchNorm1d( B),
-            ])
-
-        def forward(self, x):
-            y = x.clone()
-            for l in self.m:
-                y = l( y)
-            return x+y
-
-    # Set things up
-    def __init__( self, N, L, B, P, X, R, S=1):
-        super(ThymiosCTN, self).__init__()
-
-        # Number of sources to produce
-        self.S = S
-
-        # Front end
-        self.fe = nn.ModuleList( [
-          nn.Conv1d( in_channels=1, out_channels=N,
-                    kernel_size=L, stride=L//2, padding=L//2),
-          nn.ReLU(),
-        ])
-
-        # Norm before the rest, and apply one more dense layer
-        self.ln = nn.BatchNorm1d( N)
-        self.l1 = nn.Conv1d( in_channels=N, out_channels=B, kernel_size=1)
-
-        # Separation module
-        self.sm = nn.ModuleList([
-            ThymiosCTN.TCN( B=B, P=P, D=2**d) for _ in range( R) for d in
-            range( X)
-        ])
-
-        # Masks layer
-        self.m = nn.Conv2d( in_channels=1, out_channels=S,
-                            kernel_size=(N+1, 1), padding=(N-B//2,0))
-
-        # Back end
-        self.be = nn.ConvTranspose1d( in_channels=N*S, out_channels=S,
-                 output_padding=9, kernel_size=L, stride=L//2, padding=L//2, groups=S)
-
-    # Forward pass
-    def forward(self, x):
-        # Front end
-        for l in self.fe:
-            x = l(x)
-
-        # Split paths
-        s = x.clone()
-
-        # Separation module
-        x = self.ln(x)
-        x = self.l1(x)
-        for l in self.sm:
-            x = l(x)
-
-        # Get masks and apply them
-        x = self.m(x.unsqueeze(1))
-        if self.S == 1:
-            x = torch.sigmoid(x)
-        else:
-            x = nn.functional.softmax(x, dim=1)
-        x = x * s.unsqueeze(1)
-        del s
-
-        # Back end
-        return self.be(x.view(x.shape[0], -1, x.shape[-1]))
-
-class FullThymiosCTN(nn.Module):
+class TDCN(nn.Module):
 
     # Simplified TCN layer
     class TCN(nn.Module):
         def __init__(self, B, H, P, D):
-            super(FullThymiosCTN.TCN, self).__init__()
-
-            self.m = nn.ModuleList([
-                nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
-                nn.PReLU(),
-                nn.BatchNorm1d(H),
-                nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
-                          padding=(D * (P - 1)) // 2, dilation=D, groups=B),
-                nn.PReLU(),
-                nn.BatchNorm1d(H),
-                nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
-            ])
-
-        def forward(self, x):
-            y = x.clone()
-            for l in self.m:
-                y = l(y)
-            return x + y
-
-    # Set things up
-    def __init__(self, N, L, B, H, P, X, R, S=1):
-        super(FullThymiosCTN, self).__init__()
-
-        # Number of sources to produce
-        self.S = S
-
-        # Front end
-        self.fe = nn.ModuleList([
-            nn.Conv1d(in_channels=1, out_channels=N,
-                      kernel_size=L, stride=L // 2, padding=L // 2),
-            nn.ReLU(),
-        ])
-
-        # Norm before the rest, and apply one more dense layer
-        self.ln = nn.BatchNorm1d(N)
-        self.l1 = nn.Conv1d(in_channels=N, out_channels=B, kernel_size=1)
-
-        # Separation module
-        self.sm = nn.ModuleList([
-            FullThymiosCTN.TCN(B=B, H=H, P=P, D=2 ** d) for _ in range(R) for d in range(X)
-        ])
-
-        # Masks layer
-        self.m = nn.Conv2d(in_channels=1,
-                           out_channels=S,
-                           kernel_size=(N + 1, 1),
-                           padding=(N - B // 2, 0))
-
-        # Back end
-        self.be = nn.ConvTranspose1d(in_channels=N * S, out_channels=S,
-                                     output_padding=9, kernel_size=L,
-                                     stride=L // 2, padding=L // 2,
-                                     groups=S)
-
-    # Forward pass
-    def forward( self, x):
-        # Front end
-        for l in self.fe:
-            x = l( x)
-
-        # Split paths
-        s = x.clone()
-
-        # Separation module
-        x = self.ln( x)
-        x = self.l1( x)
-        for l in self.sm:
-            x = l( x)
-
-        # Get masks and apply them
-        x = self.m( x.unsqueeze( 1))
-        if self.S == 1:
-            x = torch.sigmoid( x)
-        else:
-            x = nn.functional.softmax( x, dim=1)
-        x = x * s.unsqueeze(1)
-        del s
-
-        # Back end
-        return self.be( x.view(x.shape[0],-1,x.shape[-1]))
-
-class FullThymiosCTN(nn.Module):
-
-    # Simplified TCN layer
-    class TCN(nn.Module):
-        def __init__(self, B, H, P, D):
-            super(FullThymiosCTN.TCN, self).__init__()
-
-            self.m = nn.ModuleList([
-                nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
-                nn.PReLU(),
-                nn.BatchNorm1d(H),
-                nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
-                          padding=(D * (P - 1)) // 2, dilation=D, groups=H),
-                nn.PReLU(),
-                nn.BatchNorm1d(H),
-                nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
-            ])
-
-        def forward(self, x):
-            y = x.clone()
-            for l in self.m:
-                y = l(y)
-            return x + y
-
-    # Set things up
-    def __init__(self, N, L, B, H, P, X, R, S=1):
-        super(FullThymiosCTN, self).__init__()
-
-        # Number of sources to produce
-        self.S = S
-
-        # Front end
-        self.fe = nn.ModuleList([
-            nn.Conv1d(in_channels=1, out_channels=N,
-                      kernel_size=L, stride=L // 2, padding=L // 2),
-            nn.ReLU(),
-        ])
-
-        # Norm before the rest, and apply one more dense layer
-        self.ln = nn.BatchNorm1d(N)
-        self.l1 = nn.Conv1d(in_channels=N, out_channels=B, kernel_size=1)
-
-        # Separation module
-        self.sm = nn.ModuleList([
-            FullThymiosCTN.TCN(B=B, H=H, P=P, D=2 ** d) for _ in range(R) for d in range(X)
-        ])
-
-        # Masks layer
-        self.m = nn.Conv2d(in_channels=1,
-                           out_channels=S,
-                           kernel_size=(N + 1, 1),
-                           padding=(N - B // 2, 0))
-
-        # Back end
-        self.be = nn.ConvTranspose1d(in_channels=N * S, out_channels=S,
-                                     output_padding=9, kernel_size=L,
-                                     stride=L // 2, padding=L // 2,
-                                     groups=S)
-
-    # Forward pass
-    def forward( self, x):
-        # Front end
-        for l in self.fe:
-            x = l( x)
-
-        # Split paths
-        s = x.clone()
-
-        # Separation module
-        x = self.ln( x)
-        x = self.l1( x)
-        for l in self.sm:
-            x = l( x)
-
-        # Get masks and apply them
-        x = self.m( x.unsqueeze( 1))
-        if self.S == 1:
-            x = torch.sigmoid( x)
-        else:
-            x = nn.functional.softmax( x, dim=1)
-        x = x * s.unsqueeze(1)
-        del s
-
-        # Back end
-        return self.be( x.view(x.shape[0],-1,x.shape[-1]))
-
-
-class GLNFullThymiosCTN(nn.Module):
-
-    # Simplified TCN layer
-    class TCN(nn.Module):
-        def __init__(self, B, H, P, D):
-            super(GLNFullThymiosCTN.TCN, self).__init__()
+            super(TDCN.TCN, self).__init__()
 
             self.m = nn.ModuleList([
                 nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
@@ -363,7 +40,7 @@ class GLNFullThymiosCTN(nn.Module):
 
     # Set things up
     def __init__(self, N, L, B, H, P, X, R, S=1):
-        super(GLNFullThymiosCTN, self).__init__()
+        super(TDCN, self).__init__()
 
         # Number of sources to produce
         self.S, self.N, self.L, self.B, self.H, self.P = S, N, L, B, H, P
@@ -383,7 +60,7 @@ class GLNFullThymiosCTN(nn.Module):
 
         # Separation module
         self.sm = nn.ModuleList([
-            GLNFullThymiosCTN.TCN(B=B, H=H, P=P, D=2 ** d)
+            TDCN.TCN(B=B, H=H, P=P, D=2 ** d)
             for _ in range(R) for d in range(X)])
 
         if B != N:
@@ -634,91 +311,6 @@ class CepstralNorm(nn.Module):
         return gLN_y
 
 
-class GLNOneDecoderThymiosCTN(nn.Module):
-
-    # Simplified TCN layer
-    class TCN(nn.Module):
-        def __init__(self, B, H, P, D):
-            super(GLNOneDecoderThymiosCTN.TCN, self).__init__()
-
-            self.m = nn.ModuleList([
-                nn.Conv1d(in_channels=B, out_channels=H, kernel_size=1),
-                nn.PReLU(),
-                GlobalLayerNorm(H),
-                nn.Conv1d(in_channels=H, out_channels=H, kernel_size=P,
-                          padding=(D * (P - 1)) // 2, dilation=D, groups=H),
-                nn.PReLU(),
-                GlobalLayerNorm(H),
-                nn.Conv1d(in_channels=H, out_channels=B, kernel_size=1),
-            ])
-
-        def forward(self, x):
-            y = x.clone()
-            for l in self.m:
-                y = l(y)
-            return x + y
-
-    # Set things up
-    def __init__(self, N, L, B, H, P, X, R, S=1):
-        super(GLNOneDecoderThymiosCTN, self).__init__()
-
-        # Number of sources to produce
-        self.S = S
-
-        # Front end
-        self.fe = nn.ModuleList([
-            nn.Conv1d(in_channels=1, out_channels=N,
-                      kernel_size=L, stride=L // 2, padding=L // 2),
-            nn.ReLU(),
-        ])
-
-        # Norm before the rest, and apply one more dense layer
-        self.ln = GlobalLayerNorm(N)
-        self.l1 = nn.Conv1d(in_channels=N, out_channels=B, kernel_size=1)
-
-        # Separation module
-        self.sm = nn.ModuleList([
-            GLNOneDecoderThymiosCTN.TCN(B=B, H=H, P=P, D=2 ** d)
-            for _ in range(R) for d in range(X)])
-
-        # Masks layer
-        self.m = nn.Conv2d(in_channels=1,
-                           out_channels=S,
-                           kernel_size=(N + 1, 1),
-                           padding=(N - N // 2, 0))
-
-        # Back end
-        self.be = nn.ConvTranspose1d(in_channels=N, out_channels=1,
-                                     output_padding=9, kernel_size=L,
-                                     stride=L // 2, padding=L // 2,
-                                     groups=1)
-
-    # Forward pass
-    def forward(self, x):
-        # Front end
-        for l in self.fe:
-            x = l(x)
-
-        # Split paths
-        s = x.clone()
-
-        # Separation module
-        x = self.ln(x)
-        x = self.l1(x)
-        for l in self.sm:
-            x = l(x)
-
-        # Get masks and apply them
-        x = self.m(x.unsqueeze(1))
-        if self.S == 1:
-            x = torch.sigmoid(x)
-        else:
-            x = nn.functional.softmax(x, dim=1)
-
-        return torch.cat([self.be(s * x[:, c, :, :])
-                         for c in range(self.S)], dim=1)
-
-
 class ResidualTN(nn.Module):
 
     # Simplified TCN layer
@@ -744,62 +336,6 @@ class ResidualTN(nn.Module):
             for l in self.m:
                 y = l(y)
             return x + y
-
-    # # DilatedConv blocks which is a chain of TCN blocks
-    # class TCNSequence(nn.Module):
-    #     # defines the reverse graph of connections.
-    #     # -1 is the input to the sequence and the other indexes are the same
-    #     # as the dilation exponent.
-    #     residual_to_from = [
-    #         [], [], [], [-1],
-    #         [], [], [], [-1, 3, 5]]
-    #
-    #     def __init__(self, B, H, P, X):
-    #         super(ResidualTN.TCNSequence, self).__init__()
-    #         self.tcns = nn.ModuleList([
-    #             ResidualTN.TCN(B=B, H=H, P=P, D=2 ** i) for i in range(X)])
-    #
-    #         # Define 1x1 convs for gathering the residual connections
-    #         self.residual_denses = nn.ModuleList([
-    #             nn.Conv1d(in_channels=len(res_connections) * B,
-    #                       out_channels=B, kernel_size=1)
-    #             for res_connections in self.residual_to_from
-    #             if len(res_connections) > 0
-    #         ])
-    #         self.layer_to_dense = {}
-    #         j = 0
-    #         for i, res_connections in enumerate(self.residual_to_from):
-    #             if len(res_connections):
-    #                 self.layer_to_dense[i] = j
-    #                 j += 1
-    #
-    #     def forward(self, x):
-    #         initial_input = x.clone()
-    #         # Clean forward pass and adding residual connections when it is
-    #         # needed
-    #
-    #         layer_outputs = []
-    #         for l, tcn in enumerate(self.tcns):
-    #             # gather residuals
-    #             residual_outputs = []
-    #             for res_ind in self.residual_to_from[l]:
-    #                 if res_ind == -1:
-    #                     residual_outputs.append(initial_input.clone())
-    #                 else:
-    #                     residual_outputs.append(layer_outputs[res_ind])
-    #
-    #             if residual_outputs:
-    #                 if len(residual_outputs) == 1:
-    #                     residuals = residual_outputs[0]
-    #                 else:
-    #                     residuals = torch.cat(residual_outputs, dim=1)
-    #                 x = tcn(x + self.residual_denses[
-    #                     self.layer_to_dense[l]](residuals))
-    #             else:
-    #                 x = tcn(x)
-    #             layer_outputs.append(x.clone())
-    #
-    #         return x
 
     # Set things up
     def __init__(self, N, L, B, H, P, X, R, S=1):
