@@ -6,13 +6,14 @@ applied on a list or or an enumerable structure of elements
 @copyright University of Illinois at Urbana Champaign
 """
 
-from progress.bar import ChargingBar
+from tqdm import tqdm
 import numpy as np
 
 
-def progress_bar_wrapper(func,
-                         l,
-                         message='Processing...'):
+def progress_bar_wrapper_old(func,
+                             l,
+                             message='Processing...'):
+    from progress.bar import ChargingBar
     """
     !
     :param l: List of elements
@@ -31,6 +32,27 @@ def progress_bar_wrapper(func,
         bar.next()
 
     bar.finish()
+    return l_copy
+
+
+def progress_bar_wrapper(func,
+                         l,
+                         message='Processing...'):
+    """
+    !
+    :param l: List of elements
+    :param func: This function should be applicable to elements of
+    the list l. E.g. a lamda func is also sufficient.
+    :param message: A string that you want to be displayed
+    :return: The result of map(func, l)
+    """
+
+    l_copy = l.copy()
+    n_elements = len(l)
+
+    for idx in tqdm(np.arange(n_elements), desc=message):
+        l_copy[idx] = func(l[idx])
+
     return l_copy
 
 
