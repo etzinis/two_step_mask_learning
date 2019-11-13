@@ -14,16 +14,12 @@ root_dir = os.path.abspath(os.path.join(current_dir, '../../'))
 sys.path.append(root_dir)
 
 from glob2 import glob
-from scipy.io.wavfile import read as scipy_wavread
 import joblib
 from scipy.io import wavfile
 import torch
-
 import two_step_mask_learning.utils.progress_display as progress_display
+from __config__ import *
 
-import time
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def parse_info_from_name(preprocessed_dirname):
@@ -114,6 +110,13 @@ def normalize_wav(wav, eps=10e-7, std=None):
     return (wav - mean) / (std + eps)
 
 
+def normalize_tensor_wav(wav, eps=10e-7, std=None):
+    mean = wav.mean(-1, keepdim=True)
+    if std is None:
+        std = wav.std(-1, keepdim=True)
+    return (wav - mean) / (std + eps)
+
+
 def write_data_wrapper_func(input_dirpath,
                             clean_folders,
                             max_wav_samples,
@@ -137,20 +140,20 @@ def write_data_wrapper_func(input_dirpath,
 
         min_len = min(mix_wav.shape[-1], sources_wavs.shape[-1])
         if min_len < max_wav_samples:
-            return
+            padded_mix_wav = torch.zeros(max_wav_samples)
+            padded_sources_wavs = torch.zeros(sources_wavs.shape[0],
+                                              max_wav_samples)
+            padded_mix_wav[:mix_wav.shape[-1]] = mix_wav
+            padded_sources_wavs[:, :sources_wavs.shape[-1]] = mix_wav
+            mix_wav = padded_mix_wav
+            sources_wavs = padded_sources_wavs
+
         mix_wav = mix_wav[:max_wav_samples]
         mix_std = mix_wav.detach().cpu().numpy().std()
         mix_wav_norm = torch.tensor(normalize_wav(mix_wav),
                                     dtype=torch.float32)
-        sources_wavs = sources_wavs[:, :max_wav_samples]
-
-        sources_w_list = [wavfile.read(p)[1] / 29491.
-                          for p in sources_paths]
-        sources_w_list_norm = [torch.tensor(normalize_wav(np_vec, std=None),
-                                            dtype=torch.float32).unsqueeze(0)
-                               for np_vec in sources_w_list]
-        sources_wavs_norm = torch.cat(sources_w_list_norm, dim=0)
-        sources_wavs_norm = sources_wavs_norm[:, :max_wav_samples]
+        sources_wavs_norm = normalize_tensor_wav(sources_wavs,
+                                                 std=mix_std)
 
         output_uid_folder = os.path.join(output_dirpath, uid)
 
@@ -264,8 +267,8 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
 
 
 def example_of_usage():
-    input_dirpath = '/mnt/data/wsj0-mix/2speakers/wav8k/min'
-    output_dirpath = '/mnt/nvme/wsj0_mix_preprocessed'
+    input_dirpath = os.path.join(WSJ0_MIX_2_8K_PATH, 'max')
+    output_dirpath = WSJ0_MIX_2_8K_PREPROCESSED_BASE_P
     wav_timelength = 4
     convert_wsj0mix_to_universal_dataset(input_dirpath,
                                          output_dirpath,
