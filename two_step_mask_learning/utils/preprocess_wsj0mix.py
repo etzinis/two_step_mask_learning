@@ -2,7 +2,6 @@
 @brief Data Preprocessor for wsj0-mix dataset for more efficient
 loading and also in order to be able to use the universal pytorch
 loader.
-
 @author Efthymios Tzinis {etzinis2@illinois.edu}
 @copyright University of Illinois at Urbana-Champaign
 """
@@ -17,7 +16,7 @@ from glob2 import glob
 import joblib
 from scipy.io import wavfile
 import torch
-import two_step_mask_learning.utils.progress_display as progress_display
+import attentional_control.utils.progress_display as progress_display
 from __config__ import *
 
 
@@ -25,11 +24,9 @@ from __config__ import *
 def parse_info_from_name(preprocessed_dirname):
     """! Given a name of a preprocessed dataset root dirname infer all the
     encoded information
-
     Args:
         preprocessed_dirname: A dirname as the one follows:
         wsj0_2mix_8k_4s_min_preprocessed or even a dirpath
-
     Returns:
         min_or_max: String whether the mixtures are aligned with the maximum
         or the minimum number of samples of the constituting sources
@@ -61,13 +58,11 @@ def infer_output_name(input_dirpath, wav_timelength):
     """! Infer the name for the output folder as shown in the example: E.g.
     for input_dirpath: wsj0-mix/2speakers/wav8k/min and for 4s timelength it
     would be wsj0_2mix_8k_4s_min_preprocessed
-
     Args: input_dirpath: The path of a wsj0mix dataset e.g.
                          wsj0-mix/2speakers/wav8k/min (for mixes with minimum
                          length)
           wav_timelength: The timelength in seconds of all the mixtures and
                           clean sources
-
     Returns: outputname: as specified in string format
              fs: sampling rate in Hz
              n_speakers: number of speakers in mixtures
@@ -144,11 +139,14 @@ def write_data_wrapper_func(input_dirpath,
             padded_sources_wavs = torch.zeros(sources_wavs.shape[0],
                                               max_wav_samples)
             padded_mix_wav[:mix_wav.shape[-1]] = mix_wav
-            padded_sources_wavs[:, :sources_wavs.shape[-1]] = mix_wav
+            padded_sources_wavs[
+                :, :min(max_wav_samples, sources_wavs.shape[-1])] = \
+                sources_wavs[:, :min(max_wav_samples, sources_wavs.shape[-1])]
             mix_wav = padded_mix_wav
             sources_wavs = padded_sources_wavs
 
         mix_wav = mix_wav[:max_wav_samples]
+        sources_wavs = sources_wavs[:, :max_wav_samples]
         mix_std = mix_wav.detach().cpu().numpy().std()
         mix_wav_norm = torch.tensor(normalize_wav(mix_wav),
                                     dtype=torch.float32)
@@ -156,7 +154,6 @@ def write_data_wrapper_func(input_dirpath,
                                                  std=mix_std)
 
         output_uid_folder = os.path.join(output_dirpath, uid)
-
         data = {
             'mixture_wav': mix_wav,
             'clean_sources_wavs': sources_wavs,
@@ -182,7 +179,6 @@ def convert_subset(input_dirpath,
                    subset=None,
                    min_or_max=None):
     """! Convert a subset of files in the appropriate format
-
     Args:
         input_dirpath: The path of a wsj0mix dataset e.g.
                        wsj0-mix/2speakers/wav8k/min (for mixes with
@@ -193,7 +189,6 @@ def convert_subset(input_dirpath,
         fs: sampling rate in Hz
         wav_timelength: The timelength in seconds of all the mixtures and
                         clean sources
-
     Generates: The structure in output_dirpath where each unique id would
     have a corresponding folder with all the files in tensors or .txt for
     configs
@@ -229,7 +224,6 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
     dataset where each sample has each own folder and all values are
     stored as Tensors for efficiency and in order to be loaded
     irrespective of the structure of the dataset.
-
     Args:
         input_dirpath: The path of a wsj0mix dataset e.g.
                        wsj0-mix/2speakers/wav8k/min (for mixes with
@@ -238,7 +232,6 @@ def convert_wsj0mix_to_universal_dataset(input_dirpath,
                         (the directories would be created recursively)
         wav_timelength: The timelength in seconds of all the mixtures
                         and clean sources
-
     Intermediate:
         output_name: Default name would be infered as follows:
                      E.g. for wsj0-mix/2speakers/wav8k/min and for 4s
