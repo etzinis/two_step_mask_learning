@@ -2,6 +2,8 @@
 
 A general two-step training recipe for sound source separation. In the first step the ideal masks are learned under a front end transformation. The ideal masks or targets seve as an upper bound for source separation performance. Then we train the parameters of the separation module using SI-SDR loss on the trained latent targets. The corresponding paper has been submitted to ICASSP 2020.
 
+[![YouTube two-step separation presentation](http://img.youtube.com/vi/C0okWxdFWU4/0.jpg)](https://www.youtube.com/watch?v=C0okWxdFWU4 "ICASSP 2020 presentation")
+
 ## Disclaimer
 University of Illinois Open Source License
 
